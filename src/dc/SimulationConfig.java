@@ -26,20 +26,20 @@ public class SimulationConfig {
 		super();
 		logger = getLogger();
 		instructions = new HashMap<>();
-		this.simulationConfigFilename = simulationConfigFilename;
+		this.filename = simulationConfigFilename;
 	}
 
 	public String getSimulationConfigFilename() {
-		return simulationConfigFilename;
+		return filename;
 	}
 
 	public void setSimulationConfigFilename(String simulationConfigFilename) {
-		this.simulationConfigFilename = simulationConfigFilename;
+		this.filename = simulationConfigFilename;
 	}
 	
 	private Logger getLogger()
 	{
-		Logger logger = Logger.getLogger("NetFramework");
+		Logger logger = Logger.getLogger("SimulationConfig");
 		FileHandler fileHandler = null;
 		try {
 			fileHandler = new FileHandler("CommonLog.txt");
@@ -64,7 +64,7 @@ public class SimulationConfig {
 	public void processInstructions()
 	{	
 		
-		try(BufferedReader br = new BufferedReader(new FileReader(simulationConfigFilename))) {
+			try(BufferedReader br = new BufferedReader(new FileReader(filename))) {
 			
 			/*
 			 * L1 : Extract Transaction*/
@@ -122,29 +122,26 @@ public class SimulationConfig {
 	{
 		String[] splitParts = line.split(",");
 		int len = splitParts.length;
-		if(len == 3)
+		if(len == 3 && splitParts[0].trim().toLowerCase().startsWith("a"))
 		{
-			// Check if the first part is add or remove
-			if(splitParts[0].trim().toLowerCase().startsWith("a"))
-			{
+			
 				String songName = splitParts[1].trim();
 				String songUrl = splitParts[2].trim();
 				logger.info("Add "+songName+ " with URL : "+ songUrl);
-			}
-			else
-			{
-				String songName = splitParts[1].trim();
-				String songUrl = splitParts[2].trim();
-				logger.info("Remove "+songName+ " with URL : "+ songUrl);
-			}
+				
+				
 		}
-		else if(len == 5)
+		else if(len == 2 && splitParts[0].trim().toLowerCase().startsWith("r"))
+		{
+			String songName = splitParts[1].trim();
+			logger.info("Remove "+songName);
+		}
+		else if(len == 4 && splitParts[0].trim().toLowerCase().startsWith("e"))
 		{
 			String songNameNew = splitParts[1].trim();
 			String songUrlNew = splitParts[2].trim();
 			String songNameOld = splitParts[3].trim();
-			String songUrlOld = splitParts[4].trim();
-			logger.info("Edit "+songNameNew+ " with URL : "+ songUrlNew+ " from "+songNameOld+ " with old URL "+songUrlOld);
+			logger.info("Edit "+songNameNew+ " with URL : "+ songUrlNew+ " from "+songNameOld);
 		}
 		else
 		{
@@ -182,7 +179,7 @@ public class SimulationConfig {
 		}
 	}
 
-	private String simulationConfigFilename;
+	private String filename;
 	private HashMap<Integer, ArrayList<String>> instructions; 
 	private Logger logger;
 	

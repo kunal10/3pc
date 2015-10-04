@@ -13,7 +13,7 @@ import java.io.Serializable;
  * 
  * All message classes are expected to extend this abstract class.
  */
-public class Message implements Serializable{
+public class Message{
 
   /**
    * 

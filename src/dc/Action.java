@@ -40,4 +40,6 @@ public class Action implements Serializable{
    * Empty for actions which don't need any description.
    */
   private String value; 
+  
+  private static final long serialVersionUID = 1L;
 }

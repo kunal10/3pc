@@ -35,34 +35,29 @@ public class Playlist {
    * Edits the passed song in the playlist and updates its content with passed
    * values. Does nothing if the passed song is not present in the playlist.
    * 
-   * @param s : Song to be modified.
-   * @param name : New name of the song. 
-   * @param url : New url of the song.
+   * @param oldName : Song to be edited.
+   * @param newName : New name of the song. 
+   * @param newUrl : New url of the song.
    * @return : Returns true if the song is edited as a result of this call,
    *           false otherwise.
    */
-  public boolean editSong(Song s, String name, String url) {
-    if (!songs.contains(s)) {
-      return false;
-    }
-    int index = songs.indexOf(s);
-    if (index == -1) {
-      return false;
-    }
-    Song song = songs.get(index);
-    song.setName(name);
-    song.setUrl(url);
-    return true;
+  public boolean editSong(String oldName, String newName, String newUrl) {
+    if (deleteSong(oldName)) {
+      Song s = new Song(newName, newUrl);
+      addSong(s);
+    } 
+    return false;
   }
   
   /**
    * Deletes the song if found in the playlist. Does nothing if the song is not
    * found.
-   * @param s : Song to be deleted from the current list.
+   * @param name : Song to be deleted from the current list.
    * @return : Returns true if the list is changed as a result of this call,
    *           false otherwise. 
    */
-  public boolean deleteSong(Song s) {
+  public boolean deleteSong(String name) {
+    Song s = new Song(name, "");
     if (songs.contains(s)) {
       return songs.remove(s);
     }

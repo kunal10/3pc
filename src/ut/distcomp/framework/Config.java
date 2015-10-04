@@ -35,6 +35,7 @@ public class Config {
 		addresses = new InetAddress[numProcesses];
 		// Add a file handler to the logger to output the logs to the file 
 		// specified in the process config
+		logger = Logger.getLogger("NetFramework"+prop.getProperty("procNum"));
 		FileHandler fileHandler = new FileHandler(prop.getProperty("logfile"));
 		logger.addHandler(fileHandler);
         SimpleFormatter formatter = new SimpleFormatter();  

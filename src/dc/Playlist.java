@@ -36,23 +36,17 @@ public class Playlist {
    * values. Does nothing if the passed song is not present in the playlist.
    * 
    * @param s : Song to be modified.
-   * @param name : New name of the song. 
+   * @param newName : New name of the song. 
    * @param url : New url of the song.
    * @return : Returns true if the song is edited as a result of this call,
    *           false otherwise.
    */
-  public boolean editSong(Song s, String name, String url) {
-    if (!songs.contains(s)) {
-      return false;
-    }
-    int index = songs.indexOf(s);
-    if (index == -1) {
-      return false;
-    }
-    Song song = songs.get(index);
-    song.setName(name);
-    song.setUrl(url);
-    return true;
+  public boolean editSong(String oldName, String newName, String newUrl) {
+    if (deleteSong(oldName)) {
+      Song s = new Song(newName, newUrl);
+      return addSong(s);
+    } 
+    return false;
   }
   
   /**
@@ -62,7 +56,8 @@ public class Playlist {
    * @return : Returns true if the list is changed as a result of this call,
    *           false otherwise. 
    */
-  public boolean deleteSong(Song s) {
+  public boolean deleteSong(String name) {
+    Song s = new Song(name, "");
     if (songs.contains(s)) {
       return songs.remove(s);
     }

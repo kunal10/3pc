@@ -139,4 +139,28 @@ public class NetController {
 		
 	}
 
+	public Config getConfig() {
+		return config;
+	}
+
+	public List<IncomingSock> getInSockets() {
+		return inSockets;
+	}
+
+	public OutgoingSock[] getOutSockets() {
+		return outSockets;
+	}
+
+	public ListenServer getListener() {
+		return listener;
+	}
+
+	public ConcurrentLinkedQueue<Message> getCommonQueue() {
+		return commonQueue;
+	}
+
+	public ConcurrentLinkedQueue<Message> getControllerQueue() {
+		return controllerQueue;
+	}
+
 }

@@ -24,6 +24,7 @@ public class Song {
 
   /**
    * Used by contains method of list of songs.
+   * Assumes that there can be only 1 song with a particular name.
    */
   @Override
   public boolean equals(Object other) {
@@ -31,7 +32,7 @@ public class Song {
       return false;
     }
     Song otherSong = (Song) other;
-    if (this.name == otherSong.getName() && this.url == otherSong.getUrl()) {
+    if (this.name == otherSong.getName()) {
       return true;
     } 
     return false;

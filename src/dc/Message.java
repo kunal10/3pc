@@ -1,5 +1,7 @@
 package dc;
 
+import java.io.Serializable;
+
 /**
  * Abstract class which captures basic functionalities of any message which is 
  * exchanged between different processes. Messages are classified on the basis
@@ -11,7 +13,7 @@ package dc;
  * 
  * All message classes are expected to extend this abstract class.
  */
-public abstract class Message {
+public class Message implements Serializable{
 
   /**
    * 

@@ -35,16 +35,16 @@ public class Playlist {
    * Edits the passed song in the playlist and updates its content with passed
    * values. Does nothing if the passed song is not present in the playlist.
    * 
-   * @param s : Song to be modified.
+   * @param oldName : Song to be edited.
    * @param newName : New name of the song. 
-   * @param url : New url of the song.
+   * @param newUrl : New url of the song.
    * @return : Returns true if the song is edited as a result of this call,
    *           false otherwise.
    */
   public boolean editSong(String oldName, String newName, String newUrl) {
     if (deleteSong(oldName)) {
       Song s = new Song(newName, newUrl);
-      return addSong(s);
+      addSong(s);
     } 
     return false;
   }
@@ -52,7 +52,7 @@ public class Playlist {
   /**
    * Deletes the song if found in the playlist. Does nothing if the song is not
    * found.
-   * @param s : Song to be deleted from the current list.
+   * @param name : Song to be deleted from the current list.
    * @return : Returns true if the list is changed as a result of this call,
    *           false otherwise. 
    */

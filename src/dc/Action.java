@@ -1,5 +1,7 @@
 package dc;
 
+import java.io.Serializable;
+
 /*
  * Class which captures all the possible actions which are performed by
  * processes involved in 3pc. Execution of any particular process in 3pc 
@@ -7,7 +9,7 @@ package dc;
  * 
  * NOTE : Controller config is described in terms of these actions.
  */
-public class Action {
+public class Action implements Serializable{
 
   public Action(ActionType type, String value) {
     this.type = type;

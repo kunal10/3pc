@@ -1,0 +1,13 @@
+NumProcesses=5
+procNum=1
+host0=localhost
+host1=localhost
+host2=localhost
+host3=localhost
+host4=localhost
+port0=5000
+port1=5001
+port2=5002
+port3=5003
+port4=5004
+logfile=LogP1.txt

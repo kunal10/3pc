@@ -17,7 +17,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
+
+import dc.Message;
 
 /**
  * Public interface for managing network connections.
@@ -30,11 +33,15 @@ public class NetController {
 	private final List<IncomingSock> inSockets;
 	private final OutgoingSock[] outSockets;
 	private final ListenServer listener;
+	private ConcurrentLinkedQueue<Message> commonQueue;
+	private ConcurrentLinkedQueue<Message> controllerQueue;
 	
 	public NetController(Config config) {
 		this.config = config;
+		this.commonQueue = new ConcurrentLinkedQueue<>();
+		this.controllerQueue = new ConcurrentLinkedQueue<>();
 		inSockets = Collections.synchronizedList(new ArrayList<IncomingSock>());
-		listener = new ListenServer(config, inSockets);
+		listener = new ListenServer(config, inSockets, commonQueue, controllerQueue);
 		outSockets = new OutgoingSock[config.numProcesses];
 		listener.start();
 	}
@@ -57,7 +64,7 @@ public class NetController {
 	 *            Sends as ASCII.  Include the sending server ID in the message
 	 * @return bool indicating success
 	 */
-	public synchronized boolean sendMsg(int process, String msg) {
+	public synchronized boolean sendMsg(int process, Message msg) {
 		try {
 			if (outSockets[process] == null)
 				initOutgoingConn(process);
@@ -95,8 +102,8 @@ public class NetController {
 	 * Return a list of msgs received on established incoming sockets
 	 * @return list of messages sorted by socket, in FIFO order. *not sorted by time received*
 	 */
-	public synchronized List<String> getReceivedMsgs() {
-		List<String> objs = new ArrayList<String>();
+	public synchronized List<Message> getReceivedMsgs() {
+		List<Message> objs = new ArrayList<Message>();
 		synchronized(inSockets) {
 			ListIterator<IncomingSock> iter  = inSockets.listIterator();
 			while (iter.hasNext()) {

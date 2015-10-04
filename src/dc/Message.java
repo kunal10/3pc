@@ -1,11 +1,12 @@
 package dc;
 
+import java.io.Serializable;
 
 /**
  * Class which captures messages exchanged between different processes/
  * coordinator. 
  */
-public class Message {
+public class Message implements Serializable  {
   /**
    * Nodes of message are classified on the basis
    * of type of source and destination. Currently we have 2 kinds of nodes:
@@ -75,4 +76,6 @@ public class Message {
    * WARNING : Uninitialized for Process -> Process messages. 
    */
   private NotificationType notificationType;
+  
+  private static final long serialVersionUID = 1L;
 }

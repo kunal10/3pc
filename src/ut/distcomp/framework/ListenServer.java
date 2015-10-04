@@ -9,8 +9,12 @@ package ut.distcomp.framework;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
+
+import dc.Message;
 
 public class ListenServer extends Thread {
 
@@ -20,11 +24,14 @@ public class ListenServer extends Thread {
 	final List<IncomingSock> socketList;
 	final Config conf;
 	final ServerSocket serverSock;
+	ConcurrentLinkedQueue<Message> commonQueue;
+	ConcurrentLinkedQueue<Message> controllerQueue;
 
-	protected ListenServer(Config conf, List<IncomingSock> sockets) {
+	protected ListenServer(Config conf, List<IncomingSock> sockets, ConcurrentLinkedQueue<Message> commonQueue, ConcurrentLinkedQueue<Message> controllerQueue) {
 		this.conf = conf;
 		this.socketList = sockets;
-
+		this.commonQueue = commonQueue;
+		this.controllerQueue = controllerQueue;
 		procNum = conf.procNum;
 		port = conf.ports[procNum];
 		try {
@@ -43,8 +50,13 @@ public class ListenServer extends Thread {
 	public void run() {
 		while (!killSig) {
 			try {
-				IncomingSock incomingSock = new IncomingSock(
-						serverSock.accept());
+				Socket incomingSocket = serverSock.accept();
+				String incomingProcId = incomingSocket.getInetAddress().getHostName();
+				IncomingSock incomingSock = null;
+				if(incomingProcId == "0")
+					incomingSock = new IncomingSock(serverSock.accept(), controllerQueue);
+				else
+					incomingSock = new IncomingSock(serverSock.accept(), commonQueue);
 				socketList.add(incomingSock);
 				incomingSock.start();
 				conf.logger.fine(String.format(

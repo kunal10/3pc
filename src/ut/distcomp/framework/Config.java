@@ -26,9 +26,7 @@ public class Config {
 	 * @throws IOException
 	 */
 	public Config(String filename) throws FileNotFoundException, IOException {
-		logger = Logger.getLogger("NetFramework");
 		
-
 		Properties prop = new Properties();
 		prop.load(new FileInputStream(filename));
 		numProcesses = loadInt(prop,"NumProcesses");
@@ -40,9 +38,6 @@ public class Config {
 		logger.addHandler(fileHandler);
         SimpleFormatter formatter = new SimpleFormatter();  
         fileHandler.setFormatter(formatter);  
-
-        // the following statement is used to log any messages  
-        logger.info("My first log");  
 		ports = new int[numProcesses];
 		for (int i=0; i < numProcesses; i++) {
 			ports[i] = loadInt(prop, "port" + i);

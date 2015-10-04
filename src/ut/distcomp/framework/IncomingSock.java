@@ -8,8 +8,10 @@
 package ut.distcomp.framework;
 
 import java.io.BufferedInputStream;
+import dc.Message;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,22 +20,23 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class IncomingSock extends Thread {
 	final static String MSG_SEP = "&";
 	Socket sock;
-	InputStream in;
+	//InputStream in;
+	ObjectInputStream in;
 	private volatile boolean shutdownSet;
-	private final ConcurrentLinkedQueue<String> queue;
+	private final ConcurrentLinkedQueue<Message> queue;
 	int bytesLastChecked = 0;
-	
-	protected IncomingSock(Socket sock) throws IOException {
+	//ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
+	protected IncomingSock(Socket sock, ConcurrentLinkedQueue<Message> queue) throws IOException {
 		this.sock = sock;
-		in = new BufferedInputStream(sock.getInputStream());
+		in = new ObjectInputStream(sock.getInputStream());
 		//in = sock.getInputStream();
 		sock.shutdownOutput();
-		queue = new ConcurrentLinkedQueue<String>();
+		this.queue = queue;
 	}
 	
-	protected List<String> getMsgs() {
-		List<String> msgs = new ArrayList<String>();
-		String tmp;
+	protected List<Message> getMsgs() {
+		List<Message> msgs = new ArrayList<Message>();
+		Message tmp;
 		while((tmp = queue.poll()) != null)
 			msgs.add(tmp);
 		return msgs;
@@ -43,7 +46,9 @@ public class IncomingSock extends Thread {
 		while (!shutdownSet) {
 			try {
 				int avail = in.available();
-				if (avail == bytesLastChecked) {
+				Message msg = (Message) in.readObject();
+				queue.add(msg);
+				/*if (avail == bytesLastChecked) {
 					sleep(10);
 				} else {
 					in.mark(avail);
@@ -59,10 +64,11 @@ public class IncomingSock extends Thread {
 					in.reset();
 					in.skip(curPtr);
 					bytesLastChecked = avail - curPtr;
-				}
+				}*/
 			} catch (IOException e) {
 				e.printStackTrace();
-			} catch (InterruptedException e) {
+			} catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}

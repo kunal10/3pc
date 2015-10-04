@@ -14,6 +14,10 @@ public class Action {
     this.value = value;
   }
 
+  public Action(Action action) {
+    this(action.getType(), action.getValue());
+  }
+
   public enum ActionType { 
     VOTE_REQ, VOTE_RES, STATE_REQ, STATE_RES, DECISION, ACK, LOG
   };

@@ -33,11 +33,15 @@ public class Message implements Serializable  {
     this.destType = destType;
     this.time = time;
   }
+  
+  /*Should be used only by non-heartbeat messages. State is null and Action is non null*/
   public Message(int src, int dest, NodeType srcType, NodeType destType,
                  Action action, long time) {
     this(src, dest, srcType, destType, time);
     this.action = new Action(action);
   }
+  
+  /*Should only be used by heartbeat messages*/
   public Message(int src, int dest, NodeType srcType, NodeType destType, 
                  State state, long time) {
     this(src, dest, srcType, destType, time);
@@ -67,6 +71,11 @@ public class Message implements Serializable  {
   }
   public NotificationType getNotificationType() {
     return notificationType;
+  }
+  public boolean isHeartbeatMessage()
+  {
+	  // If state is populated then it is a heartbeat message.
+	  return (state != null) ;
   }
   
   private int src;

@@ -1,0 +1,17 @@
+add, Thinking Out Loud, https://www.youtube.com/watch?v=lp-EO5I60KA
+Vote No: 1,2,3
+1:HALT after RECEIVE VOTE_REQ
+2:HALT after RECEIVE VOTE_REQ
+3:KILL after SEND VOTE_RES 6
+
+add, Thinking Out Loud, https://www.youtube.com/watch?v=lp-EO5I60KA
+Vote No: 1,2,3
+1:HALT after RECEIVE VOTE_REQ
+2:HALT after RECEIVE VOTE_REQ
+3:KILL after SEND VOTE_RES 6
+
+add, Thinking Out Loud, https://www.youtube.com/watch?v=lp-EO5I60KA
+Vote No: 1,2,3
+1:HALT after RECEIVE VOTE_REQ
+2:HALT after RECEIVE VOTE_REQ
+3:KILL after SEND VOTE_RES 6

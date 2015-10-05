@@ -1,5 +1,9 @@
 package dc;
 
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+import ut.distcomp.framework.Config;
 import ut.distcomp.framework.NetController;
 
 /**
@@ -15,7 +19,7 @@ public class Process {
    * @param nc
    * @param startTime
    */
-  public Process(int pId, NetController nc, long startTime) {
+  public Process(int pId, long startTime, Config config) {
     super();
     this.pId = pId;
     // cId should be set to first process whenever the process gets involved in
@@ -26,10 +30,19 @@ public class Process {
     } else {
       this.type = Message.NodeType.PARTICIPANT;
     }
-    this.nc = nc;
+     // Initialize all Blocking queues
+    controllerQueue = new LinkedBlockingQueue<>();
+    commonQueue = new LinkedBlockingQueue<>();
+    heartbeatQueue = new LinkedBlockingQueue<>();
     
-    int numParticipants = nc.getConfig().numProcesses - 1;
+    // Initialize Net Controller. Pass all the queues required.
+    nc = new NetController(config, controllerQueue, commonQueue, heartbeatQueue);
+    
+    int numParticipants = nc.getConfig().numProcesses;
+    
+    // The value at index 0 will be irrelevant since 0 corresponds to the controller process.
     boolean[] upset = new boolean[numParticipants];
+    
     for (int i = 0; i < upset.length; i++) {
       upset[i] = true;
     }
@@ -144,4 +157,19 @@ public class Process {
    * NOTE : If process dies and recovers after that, startTime will remain same.
    */
   private long startTime;
+  
+  /**
+   * Queue for storing all the incoming messages which are coming from the controller. 
+   * This is passed to NetController. Only non-heartbeat messages.
+   * */
+  private BlockingQueue<Message> controllerQueue;
+  /**
+   * Queue for storing all incoming messages from all processes other than the controller.
+   * Only non heartbeat messages. 
+   */
+  private BlockingQueue<Message> commonQueue;
+  /**
+   * Queue for storing all heartbeat messages from all the other processes. 
+   */
+  private BlockingQueue<Message> heartbeatQueue;
 }

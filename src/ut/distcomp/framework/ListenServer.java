@@ -7,7 +7,9 @@
 
 package ut.distcomp.framework;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
@@ -51,18 +53,24 @@ public class ListenServer extends Thread {
 		while (!killSig) {
 			try {
 				Socket incomingSocket = serverSock.accept();
-				String incomingProcId = incomingSocket.getInetAddress().getHostName();
+				// The first message sent on this connection is the process ID of the process which initiated this connection. 
+				int incomingProcId = Integer.parseInt((new BufferedReader(new InputStreamReader(
+	                    incomingSocket.getInputStream()))).readLine()); 
+				conf.logger.log(Level.INFO,"Host name : " +incomingProcId);
 				IncomingSock incomingSock = null;
-				if(incomingProcId == "0")
+				if(incomingProcId == 0) {
 					incomingSock = new IncomingSock(serverSock.accept(), controllerQueue);
-				else
+					conf.logger.info("Accepted a connection from the controller");
+				} else {
 					incomingSock = new IncomingSock(serverSock.accept(), commonQueue);
+				}
 				socketList.add(incomingSock);
-				incomingSock.start();
-				conf.logger.fine(String.format(
+				conf.logger.info(String.format(
 						"Server %d: New incoming connection accepted from %s",
 						procNum, incomingSock.sock.getInetAddress()
 								.getHostName()));
+				incomingSock.start();
+				
 			} catch (IOException e) {
 				if (!killSig) {
 					conf.logger.log(Level.INFO, String.format(

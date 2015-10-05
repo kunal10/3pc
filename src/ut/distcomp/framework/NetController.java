@@ -12,6 +12,7 @@
 package ut.distcomp.framework;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,8 +51,10 @@ public class NetController {
 	private synchronized void initOutgoingConn(int proc) throws IOException {
 		if (outSockets[proc] != null)
 			throw new IllegalStateException("proc " + proc + " not null");
-		
-		outSockets[proc] = new OutgoingSock(new Socket(config.addresses[proc], config.ports[proc]));
+		Socket bareSocket = new Socket(config.addresses[proc], config.ports[proc]);
+		// Send your process ID to the server to which you just initiated the connection.
+		new PrintWriter(bareSocket.getOutputStream(), true).println(config.procNum);;
+		outSockets[proc] = new OutgoingSock(bareSocket);
 		config.logger.info(String.format("Server %d: Socket to %d established", 
 				config.procNum, proc));
 	}

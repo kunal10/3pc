@@ -60,12 +60,14 @@ public class NetController {
 	}
 	
 	/**
-	 * Send a msg to another process.  This will establish a socket if one is not created yet.
-	 * Will fail if recipient has not set up their own NetController (and its associated serverSocket)
+	 * Send a msg to another process.  This will establish a socket if one is not
+	 * created yet. Will fail if recipient has not set up their own NetController 
+	 * (and its associated serverSocket).
 	 * @param process int specified in the config file - 0 based
-	 * @param msg Do not use the "&" character.  This is hardcoded as a message separator. 
-	 *            Sends as ASCII.  Include the sending server ID in the message
-	 * @return bool indicating success
+	 * @param msg Do not use the "&" character.  This is hardcoded as a message 
+	 *        separator. Sends as ASCII. Include the sending server ID in the
+	 *        message.
+	 * @return bool indicating success.
 	 */
 	public synchronized boolean sendMsg(int process, Message msg) {
 		try {
@@ -86,7 +88,8 @@ public class NetController {
 					}
 					config.logger.info(String.format("Server %d: Msg to %d failed.",
                         config.procNum, process));
-        		    config.logger.log(Level.FINE, String.format("Server %d: Socket to %d error",
+        		    config.logger.log(Level.FINE, 
+        		            String.format("Server %d: Socket to %d error",
                         config.procNum, process), e);
                     return false;
 				}
@@ -103,7 +106,8 @@ public class NetController {
 	
 	/**
 	 * Return a list of msgs received on established incoming sockets
-	 * @return list of messages sorted by socket, in FIFO order. *not sorted by time received*
+	 * @return list of messages sorted by socket, in FIFO order. *not sorted by 
+	 *         time received*
 	 */
 	public synchronized List<Message> getReceivedMsgs() {
 		List<Message> objs = new ArrayList<Message>();

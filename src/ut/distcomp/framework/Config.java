@@ -55,19 +55,21 @@ public class Config {
 	}
 	
 	/**
-	 * Default constructor for those who want to populate config file manually
+	 * Default constructor for those who want to populate config file manually.
 	 */
 	public Config() {
 	}
 
 	/**
-	 * Array of addresses of other hosts.  All hosts should have identical info here.
+	 * Array of addresses of other hosts.  All hosts should have identical info
+	 * here.
 	 */
 	public InetAddress[] addresses;
 	
 
 	/**
-	 * Array of listening port of other hosts.  All hosts should have identical info here.
+	 * Array of listening port of other hosts. All hosts should have identical
+	 * info here.
 	 */
 	public int[] ports;
 	
@@ -77,13 +79,14 @@ public class Config {
 	public int numProcesses;
 	
 	/**
-	 * This hosts number (should correspond to array above).  Each host should have a different number.
+	 * This hosts number (should correspond to array above). Each host should have
+	 * a different number.
 	 */
 	public int procNum;
 	
 	/**
 	 * Logger.  Mainly used for console printing, though be diverted to a file.
-	 * Verbosity can be restricted by raising level to WARN
+	 * Verbosity can be restricted by raising level to WARN.
 	 */
 	public Logger logger;
 }

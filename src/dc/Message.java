@@ -3,31 +3,45 @@ package dc;
 import java.io.Serializable;
 
 /**
- * Class which captures messages exchanged between different processes/
- * coordinator. 
+ * Class which captures messages exchanged in the network. 
  */
 public class Message implements Serializable  {
   /**
-   * Nodes of message are classified on the basis
-   * of type of source and destination. Currently we have 2 kinds of nodes:
+   * Nodes of message are classified on the basis of type of source and
+   * destination. Currently we have following kinds of nodes:
    * 
-   * 1. CONTROLLER : Controller which micro manages the simulation of protocol.
-   * 2. PROCESS : Process nodes involved in the execution of the protocol.
+   * 1) CONTROLLER : Controller which micro manages the simulation of protocol.
+   * 2) COORDINATOR : Coordinator of the protocol at the time message is sent.
+   * 3) PARTICIPANT : Process node participating in the protocol.
+   * 4) NON_PARTICIPANT : Process node which can no longer participate in the
+   *                      protocol.
    */
-  public enum NodeType { CONTROLLER, PROCESS };
+  public enum NodeType { 
+    CONTROLLER, COORDINATOR, PARTICIPANT, NON_PARTICIPANT
+  };
   
   /**
    * Enum for notifying the controller about next action(corresponds to the 
    * action in this message) of the process. 
    */
   public enum NotificationType { SEND, RECEIVE, DELIVER };
-  
-  public Message(int src, int dest, Action action, long time) {
+  public Message(int src, int dest, NodeType srcType, NodeType destType, 
+                 long time) {
     this.src = src;
     this.dest = dest;
-    this.action = new Action(action);
+    this.srcType = srcType;
+    this.destType = destType;
     this.time = time;
-    setNodeTypes();
+  }
+  public Message(int src, int dest, NodeType srcType, NodeType destType,
+                 Action action, long time) {
+    this(src, dest, srcType, destType, time);
+    this.action = new Action(action);
+  }
+  public Message(int src, int dest, NodeType srcType, NodeType destType, 
+                 State state, long time) {
+    this(src, dest, srcType, destType, time);
+    this.state = new State(state);
   }
   
   public int getSrc() {
@@ -45,6 +59,9 @@ public class Message implements Serializable  {
   public Action getAction() {
     return action;
   }
+  public State getState() {
+    return state;
+  }
   public long getTime() {
     return time;
   }
@@ -52,24 +69,12 @@ public class Message implements Serializable  {
     return notificationType;
   }
   
-  private void setNodeTypes() {
-    if (src == 0) {
-      srcType = NodeType.CONTROLLER;
-    } else {
-      srcType = NodeType.PROCESS;
-    }
-    if (dest == 0) {
-      destType = NodeType.CONTROLLER;
-    } else {
-      destType = NodeType.PROCESS;
-    }
-  }
-  
   private int src;
   private int dest;
   private NodeType srcType;
   private NodeType destType;
   private Action action;
+  private State state;
   private long time;
   /** 
    * Set only for message sent from a Process -> Controller.

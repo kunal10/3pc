@@ -7,10 +7,13 @@
 
 package ut.distcomp.framework;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
 
@@ -21,17 +24,23 @@ public class ListenServer extends Thread {
 	public volatile boolean killSig = false;
 	final int port;
 	final int procNum;
-	final List<IncomingSock> socketList;
+	final IncomingSock[] socketList;
 	final Config conf;
 	final ServerSocket serverSock;
-	ConcurrentLinkedQueue<Message> commonQueue;
-	ConcurrentLinkedQueue<Message> controllerQueue;
+	BlockingQueue<Message> commonQueue;
+	BlockingQueue<Message> controllerQueue;
+	BlockingQueue<Message> heartbeatQueue;
 
-	protected ListenServer(Config conf, List<IncomingSock> sockets, ConcurrentLinkedQueue<Message> commonQueue, ConcurrentLinkedQueue<Message> controllerQueue) {
+	protected ListenServer(Config conf, 
+			IncomingSock[] inSockets, 
+			BlockingQueue<Message> commonQueue2, 
+			BlockingQueue<Message> controllerQueue2, 
+			BlockingQueue<Message> heartbeatQueue2) {
 		this.conf = conf;
-		this.socketList = sockets;
-		this.commonQueue = commonQueue;
-		this.controllerQueue = controllerQueue;
+		this.socketList = inSockets;
+		this.commonQueue = commonQueue2;
+		this.controllerQueue = controllerQueue2;
+		this.heartbeatQueue = heartbeatQueue2;
 		procNum = conf.procNum;
 		port = conf.ports[procNum];
 		try {
@@ -51,18 +60,26 @@ public class ListenServer extends Thread {
 		while (!killSig) {
 			try {
 				Socket incomingSocket = serverSock.accept();
-				String incomingProcId = incomingSocket.getInetAddress().getHostName();
+				// The first message sent on this connection is the process ID of the process which initiated this connection. 
+				int incomingProcId = Integer.parseInt((new BufferedReader(new InputStreamReader(
+	                    incomingSocket.getInputStream()))).readLine()); 
+				conf.logger.log(Level.INFO,"Host name : " +incomingProcId);
 				IncomingSock incomingSock = null;
-				if(incomingProcId == "0")
+				if(incomingProcId == 0) {
 					incomingSock = new IncomingSock(serverSock.accept(), controllerQueue);
-				else
-					incomingSock = new IncomingSock(serverSock.accept(), commonQueue);
-				socketList.add(incomingSock);
-				incomingSock.start();
-				conf.logger.fine(String.format(
+					conf.logger.info("Accepted a connection from the controller");
+				} else {
+					incomingSock = new IncomingSock(serverSock.accept(), commonQueue, heartbeatQueue);
+				}
+				synchronized (socketList) {
+					socketList[incomingProcId] = (incomingSock);
+				}
+				conf.logger.info(String.format(
 						"Server %d: New incoming connection accepted from %s",
 						procNum, incomingSock.sock.getInetAddress()
 								.getHostName()));
+				incomingSock.start();
+				
 			} catch (IOException e) {
 				if (!killSig) {
 					conf.logger.log(Level.INFO, String.format(

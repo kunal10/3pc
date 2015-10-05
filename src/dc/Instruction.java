@@ -12,13 +12,18 @@ import dc.Message.NotificationType;
  */
 public class Instruction {
 	
-	public Instruction(InstructionType instructionType, String executionOrder, NotificationType notificationType, ActionType actionType, int n) {
+	public Instruction(InstructionType instructionType, 
+			String executionOrder, 
+			NotificationType notificationType, 
+			ActionType actionType, 
+			int n, int pId) {
 		super();
 		this.instructionType = instructionType;
 		this.notificationType = notificationType;
 		this.actionType = actionType;
 		this.partialSteps = n;
 		this.executionOrder = executionOrder;
+		this.pId = pId;
 	}
 
 	public enum InstructionType {
@@ -34,6 +39,8 @@ public class Instruction {
 	private String executionOrder;
 	
 	private int partialSteps;
+	
+	private int pId;
 
 	public InstructionType getInstructionType() {
 		return instructionType;
@@ -58,14 +65,20 @@ public class Instruction {
 	//Given a line read from the config parse it into Instruction format
 	public static Instruction parseInstruction(String line)
 	{
-		String[] splits = line.split(" ");
-		int len = splits.length;
-		if(len == 5 || len == 4)
+		String[] splits = line.split(":");
+		if(splits.length == 2)
 		{
-			int n = (len == 5) ? Integer.parseInt(splits[4]) : -1 ; 
-			Instruction ins = new Instruction(InstructionType.valueOf(splits[0]), splits[1], NotificationType.valueOf(splits[2]), ActionType.valueOf(splits[3]), n);
-			return ins;
+			int pId = Integer.parseInt(splits[0]);
+			String[] instSplits = splits[1].split(" ");
+			int len = instSplits.length;
+			if(len == 5 || len == 4)
+			{
+				int n = (len == 5) ? Integer.parseInt(instSplits[4]) : -1 ; 
+				Instruction ins = new Instruction(InstructionType.valueOf(instSplits[0]), instSplits[1], NotificationType.valueOf(instSplits[2]), ActionType.valueOf(instSplits[3]), n, pId);
+				return ins;
+			}
 		}
+		
 		return null;
 	}
 	
@@ -77,5 +90,13 @@ public class Instruction {
 	
 	public static void main(String[] args) {
 		System.out.println(Instruction.parseInstruction("HALT after RECEIVE VOTE_REQ 4").toString());
+	}
+
+	public int getpId() {
+		return pId;
+	}
+
+	public void setpId(int pId) {
+		this.pId = pId;
 	}
 }

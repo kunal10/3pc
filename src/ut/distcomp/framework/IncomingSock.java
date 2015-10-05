@@ -13,18 +13,28 @@ import java.io.ObjectInputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class IncomingSock extends Thread {
 	Socket sock;
 	ObjectInputStream in;
 	private volatile boolean shutdownSet;
-	private final ConcurrentLinkedQueue<Message> queue;
+	private final BlockingQueue<Message> queue;
+	private BlockingQueue<Message> heartbeatQueue;
 	int bytesLastChecked = 0;
 	
-	protected IncomingSock(Socket sock, ConcurrentLinkedQueue<Message> queue) throws IOException {
+	protected IncomingSock(Socket sock, BlockingQueue<Message> controllerQueue) throws IOException {
 		this.sock = sock;
 		in = new ObjectInputStream(sock.getInputStream());
+		sock.shutdownOutput();
+		this.queue = controllerQueue;
+	}
+	
+	protected IncomingSock(Socket sock, BlockingQueue<Message> queue, BlockingQueue<Message> heartbeatQueue) throws IOException{
+		this.sock = sock;
+		in = new ObjectInputStream(sock.getInputStream());
+		this.heartbeatQueue = heartbeatQueue;
 		sock.shutdownOutput();
 		this.queue = queue;
 	}
@@ -41,7 +51,13 @@ public class IncomingSock extends Thread {
 		while (!shutdownSet) {
 			try {	
 				Message msg = (Message) in.readObject();
-				queue.add(msg);
+				// Check if action is null and add that to heartbeat queue.
+				if(msg.getAction() == null){
+					heartbeatQueue.add(msg);
+				}
+				else{
+					queue.add(msg);
+				}
 			} catch (IOException e) {
 				e.printStackTrace();
 			} catch (ClassNotFoundException e) {

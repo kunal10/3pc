@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
 
@@ -23,17 +24,23 @@ public class ListenServer extends Thread {
 	public volatile boolean killSig = false;
 	final int port;
 	final int procNum;
-	final List<IncomingSock> socketList;
+	final IncomingSock[] socketList;
 	final Config conf;
 	final ServerSocket serverSock;
-	ConcurrentLinkedQueue<Message> commonQueue;
-	ConcurrentLinkedQueue<Message> controllerQueue;
+	BlockingQueue<Message> commonQueue;
+	BlockingQueue<Message> controllerQueue;
+	BlockingQueue<Message> heartbeatQueue;
 
-	protected ListenServer(Config conf, List<IncomingSock> sockets, ConcurrentLinkedQueue<Message> commonQueue, ConcurrentLinkedQueue<Message> controllerQueue) {
+	protected ListenServer(Config conf, 
+			IncomingSock[] inSockets, 
+			BlockingQueue<Message> commonQueue2, 
+			BlockingQueue<Message> controllerQueue2, 
+			BlockingQueue<Message> heartbeatQueue2) {
 		this.conf = conf;
-		this.socketList = sockets;
-		this.commonQueue = commonQueue;
-		this.controllerQueue = controllerQueue;
+		this.socketList = inSockets;
+		this.commonQueue = commonQueue2;
+		this.controllerQueue = controllerQueue2;
+		this.heartbeatQueue = heartbeatQueue2;
 		procNum = conf.procNum;
 		port = conf.ports[procNum];
 		try {
@@ -62,9 +69,11 @@ public class ListenServer extends Thread {
 					incomingSock = new IncomingSock(serverSock.accept(), controllerQueue);
 					conf.logger.info("Accepted a connection from the controller");
 				} else {
-					incomingSock = new IncomingSock(serverSock.accept(), commonQueue);
+					incomingSock = new IncomingSock(serverSock.accept(), commonQueue, heartbeatQueue);
 				}
-				socketList.add(incomingSock);
+				synchronized (socketList) {
+					socketList[incomingProcId] = (incomingSock);
+				}
 				conf.logger.info(String.format(
 						"Server %d: New incoming connection accepted from %s",
 						procNum, incomingSock.sock.getInetAddress()

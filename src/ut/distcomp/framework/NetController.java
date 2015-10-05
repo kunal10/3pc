@@ -18,7 +18,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 
 import dc.Message;
@@ -31,21 +33,27 @@ import dc.Message;
  */
 public class NetController {
 	private final Config config;
-	private final List<IncomingSock> inSockets;
+	private final IncomingSock[] inSockets;
 	private final OutgoingSock[] outSockets;
 	private final ListenServer listener;
-	private ConcurrentLinkedQueue<Message> commonQueue;
-	private ConcurrentLinkedQueue<Message> controllerQueue;
+	private BlockingQueue<Message> commonQueue;
+	private BlockingQueue<Message> controllerQueue;
+	private BlockingQueue<Message> heartbeatQueue;
 	
-	public NetController(Config config) {
+	public NetController(Config config, 
+			BlockingQueue<Message> controllerQueue, 
+			BlockingQueue<Message> commonQueue, 
+			BlockingQueue<Message> heartbeatQueue){
 		this.config = config;
-		this.commonQueue = new ConcurrentLinkedQueue<>();
-		this.controllerQueue = new ConcurrentLinkedQueue<>();
-		inSockets = Collections.synchronizedList(new ArrayList<IncomingSock>());
-		listener = new ListenServer(config, inSockets, commonQueue, controllerQueue);
+		this.commonQueue = commonQueue;
+		this.controllerQueue = controllerQueue;
+		this.heartbeatQueue = heartbeatQueue;
+		inSockets = new IncomingSock[config.numProcesses];
+		listener = new ListenServer(config, inSockets, commonQueue, controllerQueue, heartbeatQueue);
 		outSockets = new OutgoingSock[config.numProcesses];
 		listener.start();
 	}
+	
 	
 	// Establish outgoing connection to a process
 	private synchronized void initOutgoingConn(int proc) throws IOException {
@@ -109,7 +117,7 @@ public class NetController {
 	 * @return list of messages sorted by socket, in FIFO order. *not sorted by 
 	 *         time received*
 	 */
-	public synchronized List<Message> getReceivedMsgs() {
+	/*public synchronized List<Message> getReceivedMsgs() {
 		List<Message> objs = new ArrayList<Message>();
 		synchronized(inSockets) {
 			ListIterator<IncomingSock> iter  = inSockets.listIterator();
@@ -127,7 +135,8 @@ public class NetController {
 		}
 		
 		return objs;
-	}
+	}*/
+	
 	/**
 	 * Shuts down threads and sockets.
 	 */
@@ -150,7 +159,7 @@ public class NetController {
 		return config;
 	}
 
-	public List<IncomingSock> getInSockets() {
+	public IncomingSock[] getInSockets() {
 		return inSockets;
 	}
 
@@ -161,13 +170,4 @@ public class NetController {
 	public ListenServer getListener() {
 		return listener;
 	}
-
-	public ConcurrentLinkedQueue<Message> getCommonQueue() {
-		return commonQueue;
-	}
-
-	public ConcurrentLinkedQueue<Message> getControllerQueue() {
-		return controllerQueue;
-	}
-
 }

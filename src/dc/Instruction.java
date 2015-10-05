@@ -56,7 +56,7 @@ public class Instruction {
 	}
 	
 	//Given a line read from the config parse it into Instruction format
-	public static Instruction ParseLineIntoInstruction(String line)
+	public static Instruction parseInstruction(String line)
 	{
 		String[] splits = line.split(" ");
 		int len = splits.length;
@@ -76,6 +76,6 @@ public class Instruction {
 	}
 	
 	public static void main(String[] args) {
-		System.out.println(Instruction.ParseLineIntoInstruction("HALT after RECEIVE VOTE_REQ 4").toString());
+		System.out.println(Instruction.parseInstruction("HALT after RECEIVE VOTE_REQ 4").toString());
 	}
 }

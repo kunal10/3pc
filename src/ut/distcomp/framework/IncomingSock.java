@@ -62,7 +62,7 @@ public class IncomingSock extends Thread {
 			try {	
 				Message msg = (Message) in.readObject();
 				// Check if action is null and add that to heartbeat queue.
-				if(msg.getAction() == null){
+				if(msg.isHeartbeatMessage()){
 					heartbeatQueue.add(msg);
 				}
 				else{

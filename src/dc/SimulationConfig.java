@@ -30,7 +30,7 @@ public class SimulationConfig {
 	public SimulationConfig(String simulationConfigFilename) {
 		super();
 		logger = getLogger();
-		allTransactions = new ArrayList<ConfigElement>();
+		transactionList = new ArrayList<ConfigElement>();
 		this.filename = simulationConfigFilename;
 	}
 
@@ -72,7 +72,7 @@ public class SimulationConfig {
 	    		ConfigElement elem = new ConfigElement();
 	    		// L1 : Extract Transaction.
 	    		line = br.readLine();
-	    		elem.setTransaction(processTransaction(line));
+	    		elem.setTransaction(parseTransaction(line));
 		      
 	    		// L2 : Extract processes which should vote no for the transaction.
 	    		line = br.readLine();
@@ -89,7 +89,7 @@ public class SimulationConfig {
 	    			line = br.readLine();
 	    		}
 	    		// Add a single transaction to the list.
-	    		allTransactions.add(elem);
+	    		transactionList.add(elem);
 	    	}while(line != null);
 		}
 		catch (FileNotFoundException e) {
@@ -115,7 +115,7 @@ public class SimulationConfig {
 	 * Process a transaction add, remove or edit
 	 * @return 
 	 */
-	private Transaction processTransaction(String line) {
+	private Transaction parseTransaction(String line) {
 		String[] splitParts = line.split(",");
 		int len = splitParts.length;
 		if(len == 3) {
@@ -157,26 +157,13 @@ public class SimulationConfig {
 		}
 		return pidsNo;
 	}
+
+	public ArrayList<ConfigElement> getTransactionList() {
+		return transactionList;
+	}
 	
-	/*private void logInstructions() {
-		for (Integer element : instructions.keySet()) {
-			logger.info("Process " + element + " instructions");
-			for (String inst : instructions.get(element)) {
-				logger.info(inst);
-			}
-		}
-	}*/
-
-	public ArrayList<ConfigElement> getAllTransactions() {
-		return allTransactions;
-	}
-
-	public void setAllTransactions(ArrayList<ConfigElement> allTransactions) {
-		this.allTransactions = allTransactions;
-	}
-
 	private String filename;
-	private ArrayList<ConfigElement> allTransactions; 
+	private ArrayList<ConfigElement> transactionList; 
 	private Logger logger;
 	
 	

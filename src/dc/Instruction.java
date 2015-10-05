@@ -41,6 +41,10 @@ public class Instruction {
 	private int partialSteps;
 	
 	private int pId;
+	
+	final static int numOfInstPartsWithPartialSteps = 5;
+	
+	final static int numOfInstParts = 4;
 
 	public InstructionType getInstructionType() {
 		return instructionType;
@@ -71,14 +75,13 @@ public class Instruction {
 			int pId = Integer.parseInt(splits[0]);
 			String[] instSplits = splits[1].split(" ");
 			int len = instSplits.length;
-			if(len == 5 || len == 4)
+			if(len == numOfInstPartsWithPartialSteps || len == numOfInstParts)
 			{
-				int n = (len == 5) ? Integer.parseInt(instSplits[4]) : -1 ; 
+				int n = (len == numOfInstPartsWithPartialSteps) ? Integer.parseInt(instSplits[4]) : -1 ; 
 				Instruction ins = new Instruction(InstructionType.valueOf(instSplits[0]), instSplits[1], NotificationType.valueOf(instSplits[2]), ActionType.valueOf(instSplits[3]), n, pId);
 				return ins;
 			}
 		}
-		
 		return null;
 	}
 	

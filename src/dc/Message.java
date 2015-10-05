@@ -72,6 +72,11 @@ public class Message implements Serializable  {
   public NotificationType getNotificationType() {
     return notificationType;
   }
+  public boolean isHeartbeatMessage()
+  {
+	  // If state is populated then it is a heartbeat message.
+	  return (state != null) ;
+  }
   
   private int src;
   private int dest;

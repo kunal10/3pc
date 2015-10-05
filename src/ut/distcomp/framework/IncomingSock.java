@@ -20,7 +20,17 @@ public class IncomingSock extends Thread {
 	Socket sock;
 	ObjectInputStream in;
 	private volatile boolean shutdownSet;
-	private final BlockingQueue<Message> queue;
+	
+	/**
+	 * Used by incoming thread of both controller and other processes. 
+	 * If the controller initiates the incoming connection this queue will be set to the controller queue.
+	 * Else it is the common queue.
+	 */
+	private BlockingQueue<Message> queue;
+	
+	/**
+	 * Used only by non-controller processes to send heartbeat messages. 
+	 */
 	private BlockingQueue<Message> heartbeatQueue;
 	int bytesLastChecked = 0;
 	

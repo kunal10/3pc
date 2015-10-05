@@ -64,7 +64,6 @@ public class SimulationConfig {
 	 */
 	public void processInstructions() {	
     try(BufferedReader br = new BufferedReader(new FileReader(filename))) {
-    
       // L1 : Extract Transaction.
       String line = br.readLine();
       processTransaction(line);
@@ -119,9 +118,9 @@ public class SimulationConfig {
 		String[] splitParts = line.split(",");
 		int len = splitParts.length;
 		if(len == 3) {
-				String songName = splitParts[1].trim();
-				String songUrl = splitParts[2].trim();
-				logger.info("Add "+songName+ " with URL : "+ songUrl);
+			String songName = splitParts[1].trim();
+			String songUrl = splitParts[2].trim();
+			logger.info("Add "+songName+ " with URL : "+ songUrl);
 		} else if(len == 2) {
 			String songName = splitParts[1].trim();
 			logger.info("Remove "+songName);

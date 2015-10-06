@@ -37,18 +37,24 @@ public class Controller {
 	{
 		try {
 			
-			// Read configs for each process.
+			// Read configs for each process and initialize each process.
 			config = new Config(configFiles[0]);
 			processesConfigs = new Config[config.numProcesses];
+			processes = new Process[config.numProcesses];
 			for(int i = 1; i < config.numProcesses; i++){
 				processesConfigs[i] = new Config(configFiles[i]);
+				processes[i] = new Process(processesConfigs[i].procNum, getCurrentTime(), processesConfigs[i]);
 			}
 			
 			// Read the simulation Config.
 			SimulationConfig sc = new SimulationConfig("SimulationConfig1");
 			
-			//Process the instruction list.
 			
+			
+			//Process the instruction list.
+			for (ConfigElement transaction : sc.getTransactionList()) {
+				
+			}
 			
 			//Set min inst value to 0.
 			minSeqNumber = 0;
@@ -71,6 +77,11 @@ public class Controller {
 	private Config[] processesConfigs;
 	
 	/**
+	 * All the processes in the simulation to which the controller has to communicate to. 
+	 */
+	private Process[] processes;
+	
+	/**
 	 * Array of queues. Each array corresponding to the instruction queue of one process. Ignore 0th element. 
 	 */
 	private LinkedBlockingQueue<Instruction>[] instructionQueue; 
@@ -85,6 +96,11 @@ public class Controller {
 	 * Seq number of the next instruction to be executed.
 	 */
 	private volatile int minSeqNumber;
+	
+	private long getCurrentTime()
+	{
+		return System.currentTimeMillis() + 3000;
+	}
 	
 	public static void main(String[] args){
 		String[] s = {"config_p0.txt", "config_p1.txt", "config_p2.txt", "config_p3.txt", "config_p4.txt"};

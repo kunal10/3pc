@@ -40,6 +40,9 @@ public class NetController {
 	private BlockingQueue<Message> controllerQueue;
 	private BlockingQueue<Message> heartbeatQueue;
 	
+	/**
+	 * Used by non-controller process. 
+	 */
 	public NetController(Config config, 
 			BlockingQueue<Message> controllerQueue, 
 			BlockingQueue<Message> commonQueue, 

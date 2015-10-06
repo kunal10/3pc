@@ -16,7 +16,7 @@ public class Instruction {
 			String executionOrder, 
 			NotificationType notificationType, 
 			ActionType actionType, 
-			int n, int pId) {
+			int n, int pId, int seqNo) {
 		super();
 		this.instructionType = instructionType;
 		this.notificationType = notificationType;
@@ -24,6 +24,7 @@ public class Instruction {
 		this.partialSteps = n;
 		this.executionOrder = executionOrder;
 		this.pId = pId;
+		this.setSeqNo(seqNo);
 	}
 
 	public enum InstructionType {
@@ -41,6 +42,8 @@ public class Instruction {
 	private int partialSteps;
 	
 	private int pId;
+	
+	private int seqNo;
 	
 	final static int numOfInstPartsWithPartialSteps = 5;
 	
@@ -67,7 +70,7 @@ public class Instruction {
 	}
 	
 	//Given a line read from the config parse it into Instruction format
-	public static Instruction parseInstruction(String line)
+	public static Instruction parseInstruction(String line, int seqNo)
 	{
 		String[] splits = line.split(":");
 		if(splits.length == 2)
@@ -78,7 +81,7 @@ public class Instruction {
 			if(len == numOfInstPartsWithPartialSteps || len == numOfInstParts)
 			{
 				int n = (len == numOfInstPartsWithPartialSteps) ? Integer.parseInt(instSplits[4]) : -1 ; 
-				Instruction ins = new Instruction(InstructionType.valueOf(instSplits[0]), instSplits[1], NotificationType.valueOf(instSplits[2]), ActionType.valueOf(instSplits[3]), n, pId);
+				Instruction ins = new Instruction(InstructionType.valueOf(instSplits[0]), instSplits[1], NotificationType.valueOf(instSplits[2]), ActionType.valueOf(instSplits[3]), n, pId, seqNo);
 				return ins;
 			}
 		}
@@ -92,7 +95,7 @@ public class Instruction {
 	}
 	
 	public static void main(String[] args) {
-		System.out.println(Instruction.parseInstruction("HALT after RECEIVE VOTE_REQ 4").toString());
+		System.out.println(Instruction.parseInstruction("HALT after RECEIVE VOTE_REQ 4", 1).toString());
 	}
 
 	public int getpId() {
@@ -101,5 +104,13 @@ public class Instruction {
 
 	public void setpId(int pId) {
 		this.pId = pId;
+	}
+
+	public int getSeqNo() {
+		return seqNo;
+	}
+
+	public void setSeqNo(int seqNo) {
+		this.seqNo = seqNo;
 	}
 }

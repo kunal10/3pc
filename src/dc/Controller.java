@@ -97,6 +97,13 @@ public class Controller {
 	 */
 	private volatile int minSeqNumber;
 	
+	/**
+	 * Array capturing whether a process has reached a decision. 
+	 * This can be made out from the instruction sent by a process. 
+	 * Based on this move on to the next transaction.  
+	 */
+	private boolean[] decisionReached;
+	
 	private long getCurrentTime()
 	{
 		return System.currentTimeMillis() + 3000;

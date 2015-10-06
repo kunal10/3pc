@@ -12,6 +12,7 @@
 package ut.distcomp.framework;
 
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -41,6 +42,7 @@ public class NetController {
 	private BlockingQueue<Message> heartbeatQueue;
 	private BlockingQueue<Message> coordinatorQueue;
 	private BlockingQueue<Message> coordinatorControllerQueue;
+	private BlockingQueue<Message>[] concurrentControllerQueues;
 	
 	/**
 	 * Used by non-controller process. 
@@ -70,15 +72,29 @@ public class NetController {
 		listener.start();
 	}
 	
+	public NetController(Config config,
+			BlockingQueue<Message>[] queues)
+	{
+		this.config = config;
+		this.concurrentControllerQueues = queues;
+		inSockets = new IncomingSock[config.numProcesses];
+		listener = new ListenServer(config, 
+				inSockets, 
+				queues);
+		outSockets = new OutgoingSock[config.numProcesses];
+		listener.start();
+	}
+	
 	
 	// Establish outgoing connection to a process
 	private synchronized void initOutgoingConn(int proc) throws IOException {
 		if (outSockets[proc] != null)
 			throw new IllegalStateException("proc " + proc + " not null");
 		Socket bareSocket = new Socket(config.addresses[proc], config.ports[proc]);
+		ObjectOutputStream outputStream = new ObjectOutputStream(bareSocket.getOutputStream());
 		// Send your process ID to the server to which you just initiated the connection.
-		new PrintWriter(bareSocket.getOutputStream(), true).println(config.procNum);;
-		outSockets[proc] = new OutgoingSock(bareSocket);
+		outputStream.writeInt(config.procNum);
+		outSockets[proc] = new OutgoingSock(bareSocket, outputStream);
 		config.logger.info(String.format("Server %d: Socket to %d established", 
 				config.procNum, proc));
 	}
@@ -138,9 +154,14 @@ public class NetController {
 		synchronized(inSockets) {
 			for (int i = 0; i < inSockets.length; i++) {
 				if(inSockets[i] != null)
+				{
+					/*i*/
 					config.logger.log(Level.INFO, 
-						"No OF messages :" + inSockets[i].getMsgs().size());
-			}/*
+							"No OF messages :" + concurrentControllerQueues[i].size() + " from "+i);
+					
+					
+				}
+			/*		
 			ListIterator<IncomingSock> iter  = inSockets.listIterator();
 			while (iter.hasNext()) {
 				IncomingSock curSock = iter.next();
@@ -153,7 +174,7 @@ public class NetController {
 					iter.remove();
 				}
 			}*/
-		}
+		}}
 		
 		return objs;
 	}

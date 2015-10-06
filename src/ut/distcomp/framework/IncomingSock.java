@@ -44,23 +44,39 @@ public class IncomingSock extends Thread {
 	int bytesLastChecked = 0;
 	
 	
-	protected IncomingSock(Socket sock, BlockingQueue<Message> controllerQueue, BlockingQueue<Message> coordinatorControllerQueue) throws IOException {
+	protected IncomingSock(Socket sock, 
+			BlockingQueue<Message> controllerQueue, 
+			BlockingQueue<Message> coordinatorControllerQueue,
+			ObjectInputStream inputStream) throws IOException {
 		this.sock = sock;
-		in = new ObjectInputStream(sock.getInputStream());
+		in = inputStream;
 		sock.shutdownOutput();
 		this.queue = controllerQueue;
 		this.coordinatorQueue = coordinatorControllerQueue;
 	}
 	
-	protected IncomingSock(Socket sock, BlockingQueue<Message> queue, BlockingQueue<Message> heartbeatQueue, BlockingQueue<Message> coordinatorQueue) throws IOException{
+	protected IncomingSock(Socket sock, 
+			BlockingQueue<Message> queue, 
+			BlockingQueue<Message> heartbeatQueue, 
+			BlockingQueue<Message> coordinatorQueue,
+			ObjectInputStream inputStream) throws IOException{
 		this.sock = sock;
-		in = new ObjectInputStream(sock.getInputStream());
+		in = inputStream;
 		this.heartbeatQueue = heartbeatQueue;
 		this.coordinatorQueue = coordinatorQueue;
 		sock.shutdownOutput();
 		this.queue = queue;
 	}
 	
+	protected IncomingSock(Socket incomingSocket,
+			BlockingQueue<Message> blockingQueue,
+			ObjectInputStream inputStream) throws IOException {
+		this.sock = incomingSocket;
+		in = inputStream;
+		incomingSocket.shutdownOutput();
+		this.queue = blockingQueue;
+	}
+
 	protected List<Message> getMsgs() {
 		List<Message> msgs = new ArrayList<Message>();
 		Message tmp;

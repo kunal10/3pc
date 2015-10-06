@@ -7,29 +7,44 @@
 
 package ut.distcomp.framework;
 
-import java.io.BufferedInputStream;
 import dc.Message;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class IncomingSock extends Thread {
-	final static String MSG_SEP = "&";
 	Socket sock;
-	//InputStream in;
 	ObjectInputStream in;
 	private volatile boolean shutdownSet;
-	private final ConcurrentLinkedQueue<Message> queue;
+	
+	/**
+	 * Used by incoming thread of both controller and other processes. 
+	 * If the controller initiates the incoming connection this queue will be set to the controller queue.
+	 * Else it is the common queue.
+	 */
+	private BlockingQueue<Message> queue;
+	
+	/**
+	 * Used only by non-controller processes to send heartbeat messages. 
+	 */
+	private BlockingQueue<Message> heartbeatQueue;
 	int bytesLastChecked = 0;
-	//ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
-	protected IncomingSock(Socket sock, ConcurrentLinkedQueue<Message> queue) throws IOException {
+	
+	protected IncomingSock(Socket sock, BlockingQueue<Message> controllerQueue) throws IOException {
 		this.sock = sock;
 		in = new ObjectInputStream(sock.getInputStream());
-		//in = sock.getInputStream();
+		sock.shutdownOutput();
+		this.queue = controllerQueue;
+	}
+	
+	protected IncomingSock(Socket sock, BlockingQueue<Message> queue, BlockingQueue<Message> heartbeatQueue) throws IOException{
+		this.sock = sock;
+		in = new ObjectInputStream(sock.getInputStream());
+		this.heartbeatQueue = heartbeatQueue;
 		sock.shutdownOutput();
 		this.queue = queue;
 	}
@@ -44,27 +59,15 @@ public class IncomingSock extends Thread {
 	
 	public void run() {
 		while (!shutdownSet) {
-			try {
-				int avail = in.available();
+			try {	
 				Message msg = (Message) in.readObject();
-				queue.add(msg);
-				/*if (avail == bytesLastChecked) {
-					sleep(10);
-				} else {
-					in.mark(avail);
-					byte[] data = new byte[avail];
-					in.read(data);
-					String dataStr = new String(data);
-					int curPtr = 0;
-					int curIdx;
-					while ((curIdx = dataStr.indexOf(MSG_SEP, curPtr)) != -1) {
-						queue.offer(dataStr.substring(curPtr, curIdx));
-						curPtr = curIdx + 1;
-					}
-					in.reset();
-					in.skip(curPtr);
-					bytesLastChecked = avail - curPtr;
-				}*/
+				// Check if action is null and add that to heartbeat queue.
+				if(msg.isHeartbeatMessage()){
+					heartbeatQueue.add(msg);
+				}
+				else{
+					queue.add(msg);
+				}
 			} catch (IOException e) {
 				e.printStackTrace();
 			} catch (ClassNotFoundException e) {
@@ -72,7 +75,6 @@ public class IncomingSock extends Thread {
 				e.printStackTrace();
 			}
 		}
-		
 		shutdown();
 	}
 	

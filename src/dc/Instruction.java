@@ -30,7 +30,7 @@ public class Instruction {
 	public Instruction(Instruction other) {
 	  this(other.getInstructionType(), other.getExecutionOrder(), 
 	          other.getNotificationType(),
-	          other.getActionType(), other.getPartialSteps(), other.getpId());
+	          other.getActionType(), other.getPartialSteps(), other.getpId(), other.seqNo);
 	}
 
 	public enum InstructionType {

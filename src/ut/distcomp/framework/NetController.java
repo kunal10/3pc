@@ -126,8 +126,8 @@ public class NetController {
 						outSockets[process].cleanShutdown();
 	                	outSockets[process] = null;
 					}
-					config.logger.info(String.format("Server %d: Msg to %d failed.",
-                        config.procNum, process));
+					config.logger.info(String.format("Server %d: Msg to %d failed. Message : %s",
+                        config.procNum, process, msg.toString()));
         		    config.logger.log(Level.FINE, 
         		            String.format("Server %d: Socket to %d error",
                         config.procNum, process), e);

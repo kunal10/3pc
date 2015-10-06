@@ -44,8 +44,9 @@ public class Process {
     this.config = config;
     
     // Initialize Net Controller. Pass all the queues required.
+    config.logger.info("Initiliazing nc for process "+pId);
     nc = new NetController(config, controllerQueue, commonQueue, heartbeatQueue, coordinatorQueue, coordinatorControllerQueue);
-    
+    config.logger.info("Finished Initiliazing nc for process "+pId);
     this.numProcesses = nc.getConfig().numProcesses;
     this.transaction = null;
     this.vote = true;

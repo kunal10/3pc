@@ -25,6 +25,8 @@ public class Message implements Serializable  {
    * action in this message) of the process. 
    */
   public enum NotificationType { SEND, RECEIVE, DELIVER };
+  
+  /** Base contructor used by other constructors */
   public Message(int src, int dest, NodeType srcType, NodeType destType, 
                  long time) {
     this.src = src;
@@ -34,18 +36,47 @@ public class Message implements Serializable  {
     this.time = time;
   }
   
-  /*Should be used only by non-heartbeat messages. State is null and Action is non null*/
+  /** 
+   * Should be used only by non-heartbeat messages. State is null and Action is 
+   * non null
+   */
   public Message(int src, int dest, NodeType srcType, NodeType destType,
                  Action action, long time) {
     this(src, dest, srcType, destType, time);
     this.action = new Action(action);
   }
   
-  /*Should only be used by heartbeat messages*/
+  /** 
+   * Should be used only by non-heartbeat messages. State is null and Action is 
+   * non null
+   */
+  public Message(int src, int dest, NodeType srcType, NodeType destType,
+                 Instruction instr, long time) {
+    this(src, dest, srcType, destType, time);
+    this.instr = new Instruction(instr);
+  }
+  
+  /** Should only be used by heartbeat messages */
   public Message(int src, int dest, NodeType srcType, NodeType destType, 
                  State state, long time) {
     this(src, dest, srcType, destType, time);
     this.state = new State(state);
+  }
+  
+  public String toString() {
+    StringBuilder result = new StringBuilder();
+    result.append("Src: " + src);
+    result.append("Dest: " + dest);
+    result.append("SrcType: " + srcType.name());
+    result.append("DestType: " + destType.name());
+    if (instr != null)
+      result.append("Instr: " + instr.toString());
+    if (action != null)
+      result.append("Action: " + action.toString());
+    if (state != null)
+      result.append("State: " + state.toString());
+    result.append("Time: " + time);
+    return result.toString();
   }
   
   public int getSrc() {
@@ -63,17 +94,22 @@ public class Message implements Serializable  {
   public Action getAction() {
     return action;
   }
+  public Instruction getInstruction() {
+    return instr;
+  }
   public State getState() {
     return state;
   }
   public long getTime() {
     return time;
   }
+  public void setNotificationType(NotificationType nt) {
+    this.notificationType = nt;
+  }
   public NotificationType getNotificationType() {
     return notificationType;
   }
-  public boolean isHeartbeatMessage()
-  {
+  public boolean isHeartbeatMessage() {
 	  // If state is populated then it is a heartbeat message.
 	  return (state != null) ;
   }
@@ -83,6 +119,7 @@ public class Message implements Serializable  {
   private NodeType srcType;
   private NodeType destType;
   private Action action;
+  private Instruction instr;
   private State state;
   private long time;
   /** 

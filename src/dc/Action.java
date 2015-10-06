@@ -21,7 +21,7 @@ public class Action implements Serializable{
   }
 
   public enum ActionType { 
-    VOTE_REQ, VOTE_RES, STATE_REQ, STATE_RES, DECISION, ACK, LOG
+    START, VOTE_REQ, VOTE_RES, STATE_REQ, STATE_RES, DECISION, ACK, LOG
   };
   
   private ActionType type;
@@ -34,7 +34,7 @@ public class Action implements Serializable{
     return value;
   }
 
-  /*
+  /**
    * String describing the action to be performed. For eg:
    * value can Yes/No in case type = VOTE_RES.
    * Empty for actions which don't need any description.

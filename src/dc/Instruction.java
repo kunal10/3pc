@@ -25,9 +25,15 @@ public class Instruction {
 		this.executionOrder = executionOrder;
 		this.pId = pId;
 	}
+	
+	public Instruction(Instruction other) {
+	  this(other.getInstructionType(), other.getExecutionOrder(), 
+	          other.getNotificationType(),
+	          other.getActionType(), other.getPartialSteps(), other.getpId());
+	}
 
 	public enum InstructionType {
-		KILL, HALT, CONTINUE, REVIVE;
+		KILL, HALT, RESUME, CONTINUE, REVIVE;
 	}
 	
 	private InstructionType instructionType;
@@ -61,6 +67,10 @@ public class Instruction {
 	public ActionType getActionType() {
 		return actionType;
 	}
+	
+	public String getExecutionOrder() {
+	  return executionOrder;
+	}
 
 	public int getPartialSteps() {
 		return partialSteps;
@@ -88,7 +98,9 @@ public class Instruction {
 	@Override
 	public String toString() {
 		// TODO Auto-generated method stub
-		return instructionType.toString()+" "+executionOrder+" "+notificationType.toString()+" "+actionType.toString()+" "+partialSteps;
+		return instructionType.toString() + " " + executionOrder + " " + 
+		        notificationType.toString() + " " + actionType.toString() + " " +
+		        partialSteps;
 	}
 	
 	public static void main(String[] args) {

@@ -30,17 +30,23 @@ public class ListenServer extends Thread {
 	BlockingQueue<Message> commonQueue;
 	BlockingQueue<Message> controllerQueue;
 	BlockingQueue<Message> heartbeatQueue;
+	BlockingQueue<Message> coordinatorQueue;
+	BlockingQueue<Message> coordinatorControllerQueue;
 
 	protected ListenServer(Config conf, 
 			IncomingSock[] inSockets, 
 			BlockingQueue<Message> commonQueue2, 
 			BlockingQueue<Message> controllerQueue2, 
-			BlockingQueue<Message> heartbeatQueue2) {
+			BlockingQueue<Message> heartbeatQueue2, 
+			BlockingQueue<Message> coordinatorQueue, 
+			BlockingQueue<Message> coordinatorControllerQueue) {
 		this.conf = conf;
 		this.socketList = inSockets;
 		this.commonQueue = commonQueue2;
 		this.controllerQueue = controllerQueue2;
 		this.heartbeatQueue = heartbeatQueue2;
+		this.coordinatorQueue = coordinatorQueue;
+		this.coordinatorControllerQueue = coordinatorControllerQueue;
 		procNum = conf.procNum;
 		port = conf.ports[procNum];
 		try {
@@ -66,12 +72,14 @@ public class ListenServer extends Thread {
 				conf.logger.log(Level.INFO,"Host name : " +incomingProcId);
 				IncomingSock incomingSock = null;
 				if(incomingProcId == 0) {
-					incomingSock = new IncomingSock(serverSock.accept(), controllerQueue);
+					conf.logger.info("Got a connection from the controller");
+					incomingSock = new IncomingSock(incomingSocket, controllerQueue, coordinatorControllerQueue);
 					conf.logger.info("Accepted a connection from the controller");
 				} else {
-					incomingSock = new IncomingSock(serverSock.accept(), commonQueue, heartbeatQueue);
+					incomingSock = new IncomingSock(incomingSocket, commonQueue, heartbeatQueue, coordinatorQueue);
 				}
 				synchronized (socketList) {
+					conf.logger.log(Level.INFO, "Inside sync");
 					socketList[incomingProcId] = (incomingSock);
 				}
 				conf.logger.info(String.format(

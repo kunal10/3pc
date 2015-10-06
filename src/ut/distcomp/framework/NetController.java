@@ -39,20 +39,33 @@ public class NetController {
 	private BlockingQueue<Message> commonQueue;
 	private BlockingQueue<Message> controllerQueue;
 	private BlockingQueue<Message> heartbeatQueue;
+	private BlockingQueue<Message> coordinatorQueue;
+	private BlockingQueue<Message> coordinatorControllerQueue;
 	
 	/**
 	 * Used by non-controller process. 
+	 * @param coordinatorControllerQueue 
 	 */
 	public NetController(Config config, 
 			BlockingQueue<Message> controllerQueue, 
 			BlockingQueue<Message> commonQueue, 
-			BlockingQueue<Message> heartbeatQueue){
+			BlockingQueue<Message> heartbeatQueue,
+			BlockingQueue<Message> coordinatorQueue, 
+			BlockingQueue<Message> coordinatorControllerQueue){
 		this.config = config;
 		this.commonQueue = commonQueue;
 		this.controllerQueue = controllerQueue;
 		this.heartbeatQueue = heartbeatQueue;
+		this.coordinatorQueue = coordinatorQueue;
+		this.coordinatorControllerQueue = coordinatorControllerQueue;
 		inSockets = new IncomingSock[config.numProcesses];
-		listener = new ListenServer(config, inSockets, commonQueue, controllerQueue, heartbeatQueue);
+		listener = new ListenServer(config, 
+				inSockets, 
+				commonQueue, 
+				controllerQueue, 
+				heartbeatQueue, 
+				coordinatorQueue, 
+				coordinatorControllerQueue);
 		outSockets = new OutgoingSock[config.numProcesses];
 		listener.start();
 	}
@@ -120,9 +133,14 @@ public class NetController {
 	 * @return list of messages sorted by socket, in FIFO order. *not sorted by 
 	 *         time received*
 	 */
-	/*public synchronized List<Message> getReceivedMsgs() {
+	public synchronized List<Message> getReceivedMsgs() {
 		List<Message> objs = new ArrayList<Message>();
 		synchronized(inSockets) {
+			for (int i = 0; i < inSockets.length; i++) {
+				if(inSockets[i] != null)
+					config.logger.log(Level.INFO, 
+						"No OF messages :" + inSockets[i].getMsgs().size());
+			}/*
 			ListIterator<IncomingSock> iter  = inSockets.listIterator();
 			while (iter.hasNext()) {
 				IncomingSock curSock = iter.next();
@@ -134,11 +152,11 @@ public class NetController {
 					curSock.cleanShutdown();
 					iter.remove();
 				}
-			}
+			}*/
 		}
 		
 		return objs;
-	}*/
+	}
 	
 	/**
 	 * Shuts down threads and sockets.

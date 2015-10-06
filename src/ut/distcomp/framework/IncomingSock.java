@@ -8,6 +8,8 @@
 package ut.distcomp.framework;
 
 import dc.Message;
+import dc.Message.NodeType;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.Socket;
@@ -15,6 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class IncomingSock extends Thread {
 	Socket sock;
@@ -32,19 +36,27 @@ public class IncomingSock extends Thread {
 	 * Used only by non-controller processes to send heartbeat messages. 
 	 */
 	private BlockingQueue<Message> heartbeatQueue;
+	/**
+	 * Used by incoming thread of both controller and other processes.
+	 * If the controller initiates the incoming connection this queue will be set to the controller coordinator queue. 
+	 */
+	private BlockingQueue<Message> coordinatorQueue;
 	int bytesLastChecked = 0;
 	
-	protected IncomingSock(Socket sock, BlockingQueue<Message> controllerQueue) throws IOException {
+	
+	protected IncomingSock(Socket sock, BlockingQueue<Message> controllerQueue, BlockingQueue<Message> coordinatorControllerQueue) throws IOException {
 		this.sock = sock;
 		in = new ObjectInputStream(sock.getInputStream());
 		sock.shutdownOutput();
 		this.queue = controllerQueue;
+		this.coordinatorQueue = coordinatorControllerQueue;
 	}
 	
-	protected IncomingSock(Socket sock, BlockingQueue<Message> queue, BlockingQueue<Message> heartbeatQueue) throws IOException{
+	protected IncomingSock(Socket sock, BlockingQueue<Message> queue, BlockingQueue<Message> heartbeatQueue, BlockingQueue<Message> coordinatorQueue) throws IOException{
 		this.sock = sock;
 		in = new ObjectInputStream(sock.getInputStream());
 		this.heartbeatQueue = heartbeatQueue;
+		this.coordinatorQueue = coordinatorQueue;
 		sock.shutdownOutput();
 		this.queue = queue;
 	}
@@ -66,7 +78,15 @@ public class IncomingSock extends Thread {
 					heartbeatQueue.add(msg);
 				}
 				else{
-					queue.add(msg);
+					if(msg.getDestType() == NodeType.COORDINATOR){
+						coordinatorQueue.add(msg);
+						
+					}
+					else{
+						queue.add(msg);
+					}
+						
+					
 				}
 			} catch (IOException e) {
 				e.printStackTrace();

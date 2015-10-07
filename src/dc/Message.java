@@ -25,6 +25,10 @@ public class Message implements Serializable  {
 	public void setSrcType(NodeType srcType) {
 		this.srcType = srcType;
 	}
+	
+	public void setDestType(NodeType destType) {
+    this.destType = destType;
+  }
 
 	public void setAction(Action action) {
 		this.action = action;
@@ -69,8 +73,8 @@ public class Message implements Serializable  {
   }
   
   /** 
-   * Should be used only by non-heartbeat messages. State is null and Action is 
-   * non null
+   * Should be used only by processes for sending action or state(when decision
+   * has been made).
    */
   public Message(int src, int dest, NodeType srcType, NodeType destType,
                  Action action, long time) {
@@ -79,8 +83,8 @@ public class Message implements Serializable  {
   }
   
   /** 
-   * Should be used only by non-heartbeat messages. State is null and Action is 
-   * non null
+   * Should be used only by controller for sending instruction messages. 
+   * State and Action may be null.
    */
   public Message(int src, int dest, NodeType srcType, NodeType destType,
                  Instruction instr, long time) {
@@ -126,9 +130,6 @@ public class Message implements Serializable  {
   public Action getAction() {
     return action;
   }
-  public Instruction getInstruction() {
-    return instr;
-  }
   public State getState() {
     return state;
   }
@@ -150,11 +151,8 @@ public class Message implements Serializable  {
   private int dest;
   private NodeType srcType;
   private NodeType destType;
-  public void setDestType(NodeType destType) {
-	this.destType = destType;
-}
 
-private Action action;
+  private Action action;
   private Instruction instr;
   private State state;
   private long time;

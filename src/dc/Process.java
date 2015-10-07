@@ -1,5 +1,8 @@
 package dc;
 
+import java.util.HashMap;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
@@ -66,6 +69,41 @@ public class Process {
    * total failure.
    */
   class HeartBeat extends Thread {
+    
+    /**
+     * Maintain the exisiting set of timers for all alive processes. 
+     */
+    HashMap<Integer, TimerTask> exisitingTimers;
+    /**
+     * Timer to use for scheduling tasks.
+     */
+    Timer timer;
+    public HeartBeat() {
+      exisitingTimers = new HashMap<>();
+      timer = new Timer();
+    }
+    
+    /** 
+    * 
+    * @author av28895
+    * Timer task to schedule send of heart beat regularly.
+    */
+	  class SendHeartBeatTask extends TimerTask{
+	    public void run()
+	    {
+	      sendHeartBeat();
+	    }
+	  }
+	  
+	  class ProcessKillOnTimeoutTask extends TimerTask{
+	    int processToRemoveFromUpSet;
+	    public ProcessKillOnTimeoutTask(int i) {
+        processToRemoveFromUpSet = i;
+      }
+	    public void run() {
+        
+      }
+	  }
     public void sendHeartBeat() {
       synchronized (type) {
         Message.NodeType srcType = Message.NodeType.NON_PARTICIPANT;
@@ -88,6 +126,14 @@ public class Process {
         }
       }
     }
+    
+    private void addTimerToExistingTimer(TimerTask tt, int i){
+      int freq = 1200;
+      TimerTask tti = new ProcessKillOnTimeoutTask(i);
+      exisitingTimers.put(i, tti);
+      timer.schedule(tti, freq);
+    }
+    
 
     /**
      * Process heart beats of other processes.
@@ -101,8 +147,13 @@ public class Process {
       while (!heartbeatQueue.isEmpty()) {
         Message m = heartbeatQueue.remove();
         // int src = m.getSrc();
-        // Disable/Update timer[src].
-
+        // Disable the timer if a timer is running for that process
+        if(exisitingTimers.containsKey(m.getSrc())){
+          exisitingTimers.get(m.getSrc()).cancel();
+        }
+        // Add a new timer for the process which has sent a heartbeat
+        
+        
         // If non participant receives a decision from some other process
         // then it records it, notifies the controller.
         if (!isParticipant()) {
@@ -125,12 +176,22 @@ public class Process {
       // wise heart beat queue will start filling faster than the rate at which
       // it is consumed.
       long freq = 1000;
-      while (true) {
-        long curTime = getCurTime();
-        if ((curTime - prevSendTime) > freq) {
-          sendHeartBeat();
-          prevSendTime = curTime;
+      // Set a new timer which executed the SendHeartbeatTask for the given frequency.
+      // On kill this timer should be killed using tt.cancel(); timer.cancel();
+      // TODO: Register timer threads for killing later.
+      
+      TimerTask tt = new SendHeartBeatTask();
+      timer.schedule(tt, 0, freq);
+      
+      // Initialize all the timers to track heartbeat of other processes.
+      // Timeout on freq * 2
+      for (int i = 1; i < numProcesses; i++ ) {
+        if(i != pId){
+          addTimerToExistingTimer(tt, i);
         }
+      }
+      
+      while (true) {
         // If process has not reached a decision it keeps processing heart beats
         // of other processes.
         if (!state.isTerminalState()) {

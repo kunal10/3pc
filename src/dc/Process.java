@@ -95,6 +95,7 @@ public class Process {
 	    }
 	  }
 	  
+	  // TODO: update the alive set 
 	  class ProcessKillOnTimeoutTask extends TimerTask{
 	    int processToRemoveFromUpSet;
 	    public ProcessKillOnTimeoutTask(int i) {
@@ -114,7 +115,7 @@ public class Process {
         long curTime = getCurTime();
         // Loop starts from 1 since we don't need to send the heart beat to
         // the controller.
-        for (int dest = 1; dest <= numProcesses; dest++) {
+        for (int dest = 1; dest < numProcesses; dest++) {
           Message m = null;
           if (state.getUpset()[dest]) {
             m = new Message(pId, dest, srcType, Message.NodeType.PARTICIPANT,
@@ -129,18 +130,18 @@ public class Process {
     }
     
     private void addTimerToExistingTimer(int i){
-      int freq = 1200;
+      int delay = 1200;
       TimerTask tti = new ProcessKillOnTimeoutTask(i);
       exisitingTimers.put(i, tti);
-      timer.schedule(tti, freq);
+      timer.schedule(tti, delay);
     }
     
 
     /**
      * Process heart beats of other processes.
      * TODO :
-     * 1) Add timers to detect death.
-     * 2) Update upsets in case of death.
+     * 1) Add timers to detect death. - Done Should test
+     * 2) Update upsets in case of death. - Done Should test
      * 3) In case of total failure figure out if you are in set of last
      * processes.
      */
@@ -185,7 +186,6 @@ public class Process {
       timer.schedule(tt, 0, freq);
       
       // Initialize all the timers to track heartbeat of other processes.
-      // Timeout on freq * 2
       for (int i = 1; i < numProcesses; i++ ) {
         if(i != pId){
           addTimerToExistingTimer(i);

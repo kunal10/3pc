@@ -16,7 +16,12 @@ public class State {
   }
   
   public enum StateType { UNCERTAIN, COMMITABLE, COMMITED, ABORTED }; 
-  
+  public boolean isTerminalState() {
+    return (type == StateType.COMMITED || type == StateType.ABORTED);
+  } 
+  public void setType(StateType st) {
+    type = st;
+  }
   public StateType getType() {
     return type;
   }

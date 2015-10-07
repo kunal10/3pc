@@ -1,5 +1,8 @@
 package dc;
 
+import java.util.HashMap;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
@@ -66,6 +69,43 @@ public class Process {
    * total failure.
    */
   class HeartBeat extends Thread {
+    
+    /**
+     * Maintain the exisiting set of timers for all alive processes. 
+     */
+    HashMap<Integer, TimerTask> exisitingTimers;
+    /**
+     * Timer to use for scheduling tasks.
+     */
+    Timer timer;
+    public HeartBeat() {
+      exisitingTimers = new HashMap<>();
+      timer = new Timer();
+    }
+    
+    /** 
+    * 
+    * @author av28895
+    * Timer task to schedule send of heart beat regularly.
+    */
+	  class SendHeartBeatTask extends TimerTask{
+	    public void run()
+	    {
+	      sendHeartBeat();
+	    }
+	  }
+	  
+	  // TODO: update the alive set 
+	  class ProcessKillOnTimeoutTask extends TimerTask{
+	    int processToRemoveFromUpSet;
+	    public ProcessKillOnTimeoutTask(int i) {
+        processToRemoveFromUpSet = i;
+      }
+	    public void run() {
+        exisitingTimers.remove(processToRemoveFromUpSet);
+        state.removeProcessFromUpset(processToRemoveFromUpSet);
+      }
+	  }
     public void sendHeartBeat() {
       synchronized (type) {
         Message.NodeType srcType = Message.NodeType.NON_PARTICIPANT;
@@ -75,7 +115,7 @@ public class Process {
         long curTime = getCurTime();
         // Loop starts from 1 since we don't need to send the heart beat to
         // the controller.
-        for (int dest = 1; dest <= numProcesses; dest++) {
+        for (int dest = 1; dest < numProcesses; dest++) {
           Message m = null;
           if (state.getUpset()[dest]) {
             m = new Message(pId, dest, srcType, Message.NodeType.PARTICIPANT,
@@ -88,12 +128,20 @@ public class Process {
         }
       }
     }
+    
+    private void addTimerToExistingTimer(int i){
+      int delay = 1200;
+      TimerTask tti = new ProcessKillOnTimeoutTask(i);
+      exisitingTimers.put(i, tti);
+      timer.schedule(tti, delay);
+    }
+    
 
     /**
      * Process heart beats of other processes.
      * TODO :
-     * 1) Add timers to detect death.
-     * 2) Update upsets in case of death.
+     * 1) Add timers to detect death. - Done Should test
+     * 2) Update upsets in case of death. - Done Should test
      * 3) In case of total failure figure out if you are in set of last
      * processes.
      */
@@ -101,8 +149,13 @@ public class Process {
       while (!heartbeatQueue.isEmpty()) {
         Message m = heartbeatQueue.remove();
         // int src = m.getSrc();
-        // Disable/Update timer[src].
-
+        // Disable the timer if a timer is running for that process
+        if(exisitingTimers.containsKey(m.getSrc())){
+          exisitingTimers.get(m.getSrc()).cancel();
+        }
+        // Add a new timer for the process which has sent a heartbeat
+        addTimerToExistingTimer(m.getSrc());
+        
         // If non participant receives a decision from some other process
         // then it records it, notifies the controller.
         if (!isParticipant()) {
@@ -125,12 +178,21 @@ public class Process {
       // wise heart beat queue will start filling faster than the rate at which
       // it is consumed.
       long freq = 1000;
-      while (true) {
-        long curTime = getCurTime();
-        if ((curTime - prevSendTime) > freq) {
-          sendHeartBeat();
-          prevSendTime = curTime;
+      // Set a new timer which executed the SendHeartbeatTask for the given frequency.
+      // On kill this timer should be killed using tt.cancel(); timer.cancel();
+      // TODO: Register timer threads for killing later.
+      
+      TimerTask tt = new SendHeartBeatTask();
+      timer.schedule(tt, 0, freq);
+      
+      // Initialize all the timers to track heartbeat of other processes.
+      for (int i = 1; i < numProcesses; i++ ) {
+        if(i != pId){
+          addTimerToExistingTimer(i);
         }
+      }
+      
+      while (true) {
         // If process has not reached a decision it keeps processing heart beats
         // of other processes.
         if (!state.isTerminalState()) {

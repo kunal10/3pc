@@ -28,6 +28,9 @@ public class State {
   public boolean[] getUpset() {
     return upset;
   }
+  public void removeProcessFromUpset(int i){
+    upset[i] = false;
+  }
   
   private StateType type;
   private boolean[] upset;

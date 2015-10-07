@@ -211,6 +211,11 @@ public class Controller {
 		return System.currentTimeMillis();
 	}
 
+	/**
+	 * A send thread used by the controller to communicate with a process.
+	 * @author av28895
+	 *
+	 */
 	private class SendHandler extends Thread {
 
 		private LinkedList<Instruction> indiviualInstructionQueue;

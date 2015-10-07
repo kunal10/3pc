@@ -6,7 +6,39 @@ import java.io.Serializable;
  * Class which captures messages exchanged in the network. 
  */
 public class Message implements Serializable  {
-  /**
+  public Instruction getInstr() {
+		return instr;
+	}
+
+	public void setInstr(Instruction instr) {
+		this.instr = instr;
+	}
+
+	public void setSrc(int src) {
+		this.src = src;
+	}
+
+	public void setDest(int dest) {
+		this.dest = dest;
+	}
+
+	public void setSrcType(NodeType srcType) {
+		this.srcType = srcType;
+	}
+
+	public void setAction(Action action) {
+		this.action = action;
+	}
+
+	public void setState(State state) {
+		this.state = state;
+	}
+
+	public void setTime(long time) {
+		this.time = time;
+	}
+
+/**
    * Nodes of message are classified on the basis of type of source and
    * destination. Currently we have following kinds of nodes:
    * 
@@ -118,7 +150,11 @@ public class Message implements Serializable  {
   private int dest;
   private NodeType srcType;
   private NodeType destType;
-  private Action action;
+  public void setDestType(NodeType destType) {
+	this.destType = destType;
+}
+
+private Action action;
   private Instruction instr;
   private State state;
   private long time;

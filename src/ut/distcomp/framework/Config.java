@@ -18,6 +18,8 @@ import java.util.logging.SimpleFormatter;
 
 public class Config {
 
+	
+
 	/**
 	 * Loads config from a file.  Optionally puts in 'procNum' if in file.
 	 * See sample file for syntax
@@ -43,6 +45,7 @@ public class Config {
 			ports[i] = loadInt(prop, "port" + i);
 			addresses[i] = InetAddress.getByName(prop.getProperty("host" + i).trim());
 		}
+		simulationConfig = prop.getProperty("SimulationConfig");
 		if (prop.getProperty("procNum") != null) {
 			procNum = loadInt(prop,"procNum");
 		} else {
@@ -89,4 +92,9 @@ public class Config {
 	 * Verbosity can be restricted by raising level to WARN.
 	 */
 	public Logger logger;
+	
+	/**
+	 * Simulation config to be simulated. Used by controller.
+	 */
+	public String simulationConfig;
 }

@@ -3,6 +3,7 @@
  */
 package dc;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -38,39 +39,15 @@ public class Controller {
 	public Controller(String[] configFiles) {
 		try {
 
-			// Read configs for each process and initialize each process.
+			// Read configs for each process and initialize each process with its instruction list.
 			config = new Config(configFiles[0]);
-			processesConfigs = new Config[config.numProcesses];
-			processes = new Process[config.numProcesses];
-			instructionQueue = new LinkedList[config.numProcesses];
-			for (int i = 1; i < config.numProcesses; i++) {
-				processesConfigs[i] = new Config(configFiles[i]);
-				processes[i] = new Process(processesConfigs[i].procNum,
-						getCurrentTime(), processesConfigs[i]);
-				instructionQueue[i] = new LinkedList<Instruction>();
-			}
-
+			initializeProcesses(configFiles);
 			readSimulationConfig(config.simulationConfig);
 			initializeMessageQueues();
 			initializeCommunication();
-			// Process the instruction list.
+			
 			for (ConfigElement transaction : sc.getTransactionList()) {
-				// Set min inst value to 0.
-				minSeqNumber = 0;
-
-				// Set the current transaction to be executed.
-				currentTransaction = transaction.getTransaction();
-				config.logger.info("Current transaction :"
-						+ currentTransaction.toString());
-
-				/*
-				 * process the transaction into n process inst lists start n
-				 * sender threads
-				 */
-				for (int i = 1; i < instructionQueue.length; i++) {
-					instructionQueue[i].clear();
-				}
-				splitTransactionsIntoIndiviualLists(transaction.instructions);
+				initializeTransaction(transaction);
 				Thread[] threads = new SendHandler[config.numProcesses];
 				for (int i = 1; i < threads.length; i++) {
 					threads[i] = new SendHandler(instructionQueue[i], i,
@@ -90,6 +67,36 @@ public class Controller {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+	}
+	
+	private void initializeProcesses(String[] configFiles) throws FileNotFoundException, IOException{
+		processesConfigs = new Config[config.numProcesses];
+		processes = new Process[config.numProcesses];
+		instructionQueue = new LinkedList[config.numProcesses];
+		for (int i = 1; i < config.numProcesses; i++) {
+			processesConfigs[i] = new Config(configFiles[i]);
+			processes[i] = new Process(processesConfigs[i].procNum,
+					getCurrentTime(), processesConfigs[i]);
+			instructionQueue[i] = new LinkedList<Instruction>();
+		}
+	}
+	
+	private void initializeTransaction(ConfigElement transaction){
+		// Set min inst value to 0.
+		minSeqNumber = 0;
+		// Set the current transaction to be executed.
+		currentTransaction = transaction.getTransaction();
+		config.logger.info("Current transaction :"
+				+ currentTransaction.toString());
+
+		/*
+		 * process the transaction into n process inst lists start n
+		 * sender threads
+		 */
+		for (int i = 1; i < instructionQueue.length; i++) {
+			instructionQueue[i].clear();
+		}
+		splitTransactionsIntoIndiviualLists(transaction.instructions);
 	}
 	
 	/**

@@ -17,7 +17,8 @@ import ut.distcomp.framework.NetController;
  */
 public class Process {
   
-  /**
+  
+/**
    * @param pId
    * @param nc
    * @param startTime
@@ -37,12 +38,15 @@ public class Process {
     controllerQueue = new LinkedBlockingQueue<>();
     commonQueue = new LinkedBlockingQueue<>();
     heartbeatQueue = new LinkedBlockingQueue<>();
+    coordinatorQueue = new LinkedBlockingQueue<>();
+    coordinatorControllerQueue = new LinkedBlockingQueue<>();
     
     this.config = config;
     
     // Initialize Net Controller. Pass all the queues required.
-    nc = new NetController(config, controllerQueue, commonQueue, heartbeatQueue);
-    
+    config.logger.info("Initiliazing nc for process "+pId);
+    nc = new NetController(config, controllerQueue, commonQueue, heartbeatQueue, coordinatorQueue, coordinatorControllerQueue);
+    config.logger.info("Finished Initiliazing nc for process "+pId);
     this.numProcesses = nc.getConfig().numProcesses;
     this.transaction = null;
     this.vote = true;
@@ -255,6 +259,14 @@ public class Process {
    * Queue for storing all heartbeat messages from all the other processes. 
    */
   private BlockingQueue<Message> heartbeatQueue;
+  /**
+   * Queue for storing all messages sent to coordinator by all processes except controller 
+   */
+  private BlockingQueue<Message> coordinatorQueue;
+  /**
+   * Queue for storing all messages sent to coordinator by controller 
+   */
+  private BlockingQueue<Message> coordinatorControllerQueue;
   /**
    * Config object used for setting up NetController. 
    */

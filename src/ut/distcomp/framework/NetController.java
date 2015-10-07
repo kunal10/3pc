@@ -12,6 +12,7 @@
 package ut.distcomp.framework;
 
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -39,17 +40,47 @@ public class NetController {
 	private BlockingQueue<Message> commonQueue;
 	private BlockingQueue<Message> controllerQueue;
 	private BlockingQueue<Message> heartbeatQueue;
+	private BlockingQueue<Message> coordinatorQueue;
+	private BlockingQueue<Message> coordinatorControllerQueue;
+	private BlockingQueue<Message>[] concurrentControllerQueues;
 	
+	/**
+	 * Used by non-controller process. 
+	 * @param coordinatorControllerQueue 
+	 */
 	public NetController(Config config, 
 			BlockingQueue<Message> controllerQueue, 
 			BlockingQueue<Message> commonQueue, 
-			BlockingQueue<Message> heartbeatQueue){
+			BlockingQueue<Message> heartbeatQueue,
+			BlockingQueue<Message> coordinatorQueue, 
+			BlockingQueue<Message> coordinatorControllerQueue){
 		this.config = config;
 		this.commonQueue = commonQueue;
 		this.controllerQueue = controllerQueue;
 		this.heartbeatQueue = heartbeatQueue;
+		this.coordinatorQueue = coordinatorQueue;
+		this.coordinatorControllerQueue = coordinatorControllerQueue;
 		inSockets = new IncomingSock[config.numProcesses];
-		listener = new ListenServer(config, inSockets, commonQueue, controllerQueue, heartbeatQueue);
+		listener = new ListenServer(config, 
+				inSockets, 
+				commonQueue, 
+				controllerQueue, 
+				heartbeatQueue, 
+				coordinatorQueue, 
+				coordinatorControllerQueue);
+		outSockets = new OutgoingSock[config.numProcesses];
+		listener.start();
+	}
+	
+	public NetController(Config config,
+			BlockingQueue<Message>[] queues)
+	{
+		this.config = config;
+		this.concurrentControllerQueues = queues;
+		inSockets = new IncomingSock[config.numProcesses];
+		listener = new ListenServer(config, 
+				inSockets, 
+				queues);
 		outSockets = new OutgoingSock[config.numProcesses];
 		listener.start();
 	}
@@ -60,9 +91,10 @@ public class NetController {
 		if (outSockets[proc] != null)
 			throw new IllegalStateException("proc " + proc + " not null");
 		Socket bareSocket = new Socket(config.addresses[proc], config.ports[proc]);
+		ObjectOutputStream outputStream = new ObjectOutputStream(bareSocket.getOutputStream());
 		// Send your process ID to the server to which you just initiated the connection.
-		new PrintWriter(bareSocket.getOutputStream(), true).println(config.procNum);;
-		outSockets[proc] = new OutgoingSock(bareSocket);
+		outputStream.writeInt(config.procNum);
+		outSockets[proc] = new OutgoingSock(bareSocket, outputStream);
 		config.logger.info(String.format("Server %d: Socket to %d established", 
 				config.procNum, proc));
 	}
@@ -94,8 +126,8 @@ public class NetController {
 						outSockets[process].cleanShutdown();
 	                	outSockets[process] = null;
 					}
-					config.logger.info(String.format("Server %d: Msg to %d failed.",
-                        config.procNum, process));
+					config.logger.info(String.format("Server %d: Msg to %d failed. Message : %s",
+                        config.procNum, process, msg.toString()));
         		    config.logger.log(Level.FINE, 
         		            String.format("Server %d: Socket to %d error",
                         config.procNum, process), e);
@@ -117,9 +149,19 @@ public class NetController {
 	 * @return list of messages sorted by socket, in FIFO order. *not sorted by 
 	 *         time received*
 	 */
-	/*public synchronized List<Message> getReceivedMsgs() {
+	public synchronized List<Message> getReceivedMsgs() {
 		List<Message> objs = new ArrayList<Message>();
 		synchronized(inSockets) {
+			for (int i = 0; i < inSockets.length; i++) {
+				if(inSockets[i] != null)
+				{
+					/*i*/
+					config.logger.log(Level.INFO, 
+							"No OF messages :" + concurrentControllerQueues[i].size() + " from "+i);
+					
+					
+				}
+			/*		
 			ListIterator<IncomingSock> iter  = inSockets.listIterator();
 			while (iter.hasNext()) {
 				IncomingSock curSock = iter.next();
@@ -131,11 +173,11 @@ public class NetController {
 					curSock.cleanShutdown();
 					iter.remove();
 				}
-			}
-		}
+			}*/
+		}}
 		
 		return objs;
-	}*/
+	}
 	
 	/**
 	 * Shuts down threads and sockets.

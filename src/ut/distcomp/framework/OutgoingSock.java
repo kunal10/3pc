@@ -19,10 +19,9 @@ public class OutgoingSock {
 	Socket sock;
 	ObjectOutputStream out;
 	
-	protected OutgoingSock(Socket sock) throws IOException {
+	protected OutgoingSock(Socket sock, ObjectOutputStream outputStream) throws IOException {
 		this.sock = sock;
-		
-		out = new ObjectOutputStream(sock.getOutputStream());
+		out = outputStream;
 		sock.shutdownInput();
 	}
 	

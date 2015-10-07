@@ -9,8 +9,10 @@ import java.util.LinkedList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 
+import dc.Action.ActionType;
 import dc.Instruction.InstructionType;
 import dc.Message.NodeType;
+import dc.Message.NotificationType;
 import ut.distcomp.framework.Config;
 import ut.distcomp.framework.NetController;
 
@@ -19,80 +21,63 @@ import ut.distcomp.framework.NetController;
  *
  */
 public class Controller {
-	
+
 	/**
-	 * Has the following components:
-	 * List of configs for each process or there is a common config.- Done 
-	 * Read from that make an array of config classes which indiviual proc ids. - Done  
-	 * Array of 5 process messages queues. - Done
-	 * Netcontroller which assigns each incoming thread its own queue.- Done 
-	 * I/P with a given Simulation Config parse that and you get a list of transactions- Done 
-	 * For each transaction :
-	 * Take the list of instruction sequence and go over it add it to the indiviual queues.
-	 * setVotes and transactions for all the processes in your array by using the startTransaction method.
-	 * Then create 5 Sender threads which implement our dumb algorithm. 
-	 * There is an array of 5 Instruction queues.  
+	 * Controller reads its own config and the steps to be simulated.  
+	 * Sets up the communication framework for itself 
+	 * Initializes all the processes with their indiviual configs 
+	 * Starts a sender thread for each process for each transaction.
 	 */
-	
+
 	/**
 	 * 
-	 * @param configFiles Array of filenames of all the configs to be used. 
-	 * 0th Element corresponds to the config for the controller.
+	 * @param configFiles
+	 *            Array of filenames of all the configs to be used. 0th Element
+	 *            corresponds to the config for the controller.
 	 */
-	public Controller(String[] configFiles)
-	{
+	public Controller(String[] configFiles) {
 		try {
-			
+
 			// Read configs for each process and initialize each process.
 			config = new Config(configFiles[0]);
 			processesConfigs = new Config[config.numProcesses];
 			processes = new Process[config.numProcesses];
 			instructionQueue = new LinkedList[config.numProcesses];
-			for(int i = 1; i < config.numProcesses; i++){
+			for (int i = 1; i < config.numProcesses; i++) {
 				processesConfigs[i] = new Config(configFiles[i]);
-				processes[i] = new Process(processesConfigs[i].procNum, getCurrentTime(), processesConfigs[i]);
+				processes[i] = new Process(processesConfigs[i].procNum,
+						getCurrentTime(), processesConfigs[i]);
 				instructionQueue[i] = new LinkedList<Instruction>();
 			}
-			
-			// Read the simulation Config.
-			SimulationConfig sc = new SimulationConfig("SimulationConfig1");
-			sc.processInstructions();
-			
-			// Initialize the message queues for all the incoming processes. 
-			messageQueue = new LinkedBlockingQueue[config.numProcesses];
-			for(int i = 0; i < messageQueue.length; i++){
-				messageQueue[i] = new LinkedBlockingQueue<Message>(); 
-			}
-			
-			config.logger.info("Initialized message queues");
-			
-			// Initialize the communication object 
-			nc = new NetController(config, messageQueue);
-			config.logger.info("Initialized net contorller for the controller");
-			
-			
-			//Set min inst value to 0.
-			minSeqNumber = 0;
-			
-			//Process the instruction list.
+
+			readSimulationConfig(config.simulationConfig);
+			initializeMessageQueues();
+			initializeCommunication();
+			// Process the instruction list.
 			for (ConfigElement transaction : sc.getTransactionList()) {
-				
+				// Set min inst value to 0.
+				minSeqNumber = 0;
+
 				// Set the current transaction to be executed.
 				currentTransaction = transaction.getTransaction();
-				config.logger.info("Current transaction :"+currentTransaction.toString());
-				
-				/* process the transaction into n process inst lists
-				 * start n sender threads*/
+				config.logger.info("Current transaction :"
+						+ currentTransaction.toString());
+
+				/*
+				 * process the transaction into n process inst lists start n
+				 * sender threads
+				 */
 				for (int i = 1; i < instructionQueue.length; i++) {
 					instructionQueue[i].clear();
 				}
 				splitTransactionsIntoIndiviualLists(transaction.instructions);
 				Thread[] threads = new SendHandler[config.numProcesses];
-				for(int i = 1; i < threads.length; i++){
-					threads[i] = new SendHandler(instructionQueue[i], i, !(transaction.getNoVotes().contains(i)));
+				for (int i = 1; i < threads.length; i++) {
+					threads[i] = new SendHandler(instructionQueue[i], i,
+							!(transaction.getNoVotes().contains(i)));
 					threads[i].start();
 				}
-				for(int i = 1; i < threads.length; i++){
+				for (int i = 1; i < threads.length; i++) {
 					try {
 						threads[i].join();
 					} catch (InterruptedException e) {
@@ -108,8 +93,36 @@ public class Controller {
 	}
 	
 	/**
-	 * Look at all the instructions specified as a part of simulation config. 
+	 * Read the simulation config.
+	 * @param filename
+	 */
+	private void readSimulationConfig(String filename){
+		sc = new SimulationConfig("SimulationConfig1");
+		sc.processInstructions();
+	}
+	
+	/**
+	 * Initialize the message queues for all the incoming processes.
+	 */
+	private void initializeMessageQueues(){
+		messageQueue = new LinkedBlockingQueue[config.numProcesses];
+		for (int i = 0; i < messageQueue.length; i++) {
+			messageQueue[i] = new LinkedBlockingQueue<Message>();
+		}
+		config.logger.info("Initialized message queues");
+	}
+	
+	/**
+	 * Initialize communication.
+	 */
+	private void initializeCommunication(){
+		nc = new NetController(config, messageQueue);
+		config.logger.info("Initialized net contorller for the controller");
+	}
+	/**
+	 * Look at all the instructions specified as a part of simulation config.
 	 * Split them into each process instruction list.
+	 * 
 	 * @param instructions
 	 */
 	private void splitTransactionsIntoIndiviualLists(
@@ -117,176 +130,311 @@ public class Controller {
 		for (Instruction instruction : instructions) {
 			int pId = instruction.getpId();
 			instructionQueue[pId].add(instruction);
-			config.logger.info(String.format("Adding %d to %d queue",instruction.getSeqNo(), pId));
+			config.logger.info(String.format("Adding %d to %d queue",
+					instruction.getSeqNo(), pId));
 		}
 	}
-	
-	private void incrementNextInstructionSequenceNum() {
-		++ minSeqNumber;
-	}
 
+	private void incrementNextInstructionSequenceNum() {
+		++minSeqNumber;
+	}
 
 	/**
 	 * Config corresponding to the controller.
 	 */
 	private Config config;
-	
+
 	/**
 	 * All the configs to each of the process. Ignore 0th element.
 	 */
 	private Config[] processesConfigs;
+
+	/**
+	 * Simulation Config to be used.
+	 */
+	private SimulationConfig sc;
 	
 	/**
-	 * All the processes in the simulation to which the controller has to communicate to. 
+	 * All the processes in the simulation to which the controller has to
+	 * communicate to.
 	 */
 	private Process[] processes;
-	
+
 	/**
-	 * Array of queues. Each array corresponding to the instruction queue of one process. Ignore 0th element. 
+	 * Array of queues. Each array corresponding to the instruction queue of one
+	 * process. Ignore 0th element.
 	 */
-	private LinkedList<Instruction>[] instructionQueue; 
-	
+	private LinkedList<Instruction>[] instructionQueue;
+
 	/**
-	 * Queues for storing the incoming messages one for each process. 
-	 * These queues should be passed to the net controller to initialize for the incoming sock.
+	 * Queues for storing the incoming messages one for each process. These
+	 * queues should be passed to the net controller to initialize for the
+	 * incoming sock.
 	 */
 	private LinkedBlockingQueue<Message>[] messageQueue;
-	
+
 	/**
 	 * Communication network object for controller.
 	 */
 	private NetController nc;
-	
+
 	/**
 	 * Seq number of the next instruction to be executed.
 	 */
 	private volatile int minSeqNumber;
-	
+
 	/**
 	 * The current transaction being executed.
 	 */
 	private Transaction currentTransaction;
-	
+
 	/**
-	 * ID of the current coordinator 
+	 * ID of the current coordinator
 	 */
 	private volatile int currentCoordinatorId;
 	/**
-	 * Array capturing whether a process has reached a decision. 
-	 * This can be made out from the instruction sent by a process. 
-	 * Based on this move on to the next transaction.  
+	 * Array capturing whether a process has reached a decision. This can be
+	 * made out from the instruction sent by a process. Based on this move on to
+	 * the next transaction.
 	 */
 	private boolean[] decisionReached;
-	
-	private long getCurrentTime()
-	{
+
+	private long getCurrentTime() {
 		return System.currentTimeMillis() + 3000;
 	}
-	
-	private class SendHandler extends Thread{
+
+	private class SendHandler extends Thread {
 
 		private LinkedList<Instruction> indiviualInstructionQueue;
 		private int procNum;
 		// 0 means no and 1 means yes.
 		private boolean vote;
 		private int currentInstructionSeqNum;
-		
-		public SendHandler(LinkedList<Instruction> instructionQueue, int procNum, boolean vote) {
-			// TODO Auto-generated constructor stub
-			this.indiviualInstructionQueue = instructionQueue; 
+
+		public SendHandler(LinkedList<Instruction> instructionQueue,
+				int procNum, boolean vote) {
+			this.indiviualInstructionQueue = instructionQueue;
 			this.procNum = procNum;
 			this.vote = vote;
 		}
-		
+
 		/**
-		 * Send a message to both participant and coordinator thread of the current coordinator process.
+		 * Send a message to both participant and coordinator thread of the
+		 * current coordinator process.
+		 * 
 		 * @param m
 		 */
-		private void sendMessageToCoordinatorAndParticipant(Message m){
-			nc.sendMsg(procNum, m);	
-			if(procNum == currentCoordinatorId){
+		private void sendMessageToCoordinatorAndParticipant(Message m) {
+			nc.sendMsg(procNum, m);
+			if (procNum == currentCoordinatorId) {
 				m.setDestType(NodeType.COORDINATOR);
 				nc.sendMsg(procNum, m);
-			}	
+			}
+		}
+
+		/**
+		 * Check if the instruction to be executed corresponds to message which you received.
+		 * Compare the action type and notification type.
+		 * @param i
+		 * @param m
+		 * @return
+		 */
+		private boolean compareInstructionToMessage(Instruction i, Message m) {
+			return (m.getAction().getType() == i.getActionType() 
+					&& m.getNotificationType() == i.getNotificationType());
 		}
 		
-		private boolean compareInstructionToMessage(Instruction i, Message m){
-		
-			return false;
+		/**
+		 * Send halt to all processes. 
+		 * For the coordinator process send to both participant and coordinator
+		 * Sleep for sometime and then send resume to all.
+		 * @param i
+		 * @param m
+		 */
+		private void sendHaltToProcess(Instruction i, Message m){
+			m.setSrcType(NodeType.CONTROLLER);
+			m.setSrc(0);
+			m.setInstr(i);
+			for(int i1=1; i1 < config.numProcesses; i1++){
+				m.setDest(i1);
+				m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
+				nc.sendMsg(i1, m);
+				if(i1 == currentCoordinatorId)
+				{
+					// Send another message to the coordinator
+					m.setDestType(NodeType.COORDINATOR);
+					nc.sendMsg(i1, m);
+				}
+			}
+			try {
+				Thread.sleep(60000);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			// Send resume after some halt.
+			
+			i.setInstructionType(InstructionType.RESUME);
+			m.setInstr(i);
+			for(int i1=1; i1 < config.numProcesses; i1++){
+				m.setDest(i1);
+				m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
+				nc.sendMsg(i1, m);
+				if(i1 == currentCoordinatorId)
+				{
+					// Send another message to the coordinator
+					m.setDestType(NodeType.COORDINATOR);
+					nc.sendMsg(i1, m);
+				}
+			}
 		}
-		
-		private void sendInstructionToProcess(Instruction i, Message m){
+
+		/**
+		 * Send the instruction to a process. 
+		 * Update the sequence number of the controller after sending the message.
+		 * @param i
+		 * @param m
+		 */
+		private void sendInstructionToProcess(Instruction i, Message m) {
 			InstructionType iType = i.getInstructionType();
-			if(iType == InstructionType.HALT){
-				// Send to all and make sure you send it to both the coordinator and participant thread of the coordinator
+			if (iType == InstructionType.HALT) {
+				// Send to all and make sure you send it to both the coordinator
+				// and participant thread of the coordinator
+				sendHaltToProcess(i, m);
+			} else if (iType == InstructionType.KILL) {
+				m.setInstr(i);
+				m.setDest(procNum);
+				// Check: What did we decide ??
+				m.setDestType(m.getSrcType());
+				m.setSrc(0);
+				m.setSrcType(NodeType.CONTROLLER);
+				nc.sendMsg(procNum, m);
+			} else {
+				config.logger.log(Level.WARNING,
+						"Can't make out the Instruction type");
 			}
-			else if(iType == InstructionType.KILL){
-				
-			}
-			else{
-				config.logger.log(Level.WARNING, "Can't make out the Instruction type");
-			}
+			// Move to next instruction
+			incrementNextInstructionSequenceNum();
 		}
-		
-		
-		
+
 		@Override
 		public void run() {
-			// Call the process init transaction here 
+			// Call the process init transaction here
 			processes[procNum].initNextTransaction(currentTransaction, vote);
-			// Send a message to start the transaction.
-			// Check the time u send here 
-			Message startMessage = new Message(0, procNum, NodeType.CONTROLLER, NodeType.PARTICIPANT, System.currentTimeMillis());
-			sendMessageToCoordinatorAndParticipant(startMessage);
+			// TODO: Send a message to start the transaction.
+			// TODO: Check the time u send here
+			/*Message startMessage = new Message(0, procNum, NodeType.CONTROLLER,
+					NodeType.PARTICIPANT, System.currentTimeMillis());
+			sendMessageToCoordinatorAndParticipant(startMessage);*/
 			for (Instruction currentInstruction : indiviualInstructionQueue) {
-				currentInstructionSeqNum = indiviualInstructionQueue.peek().getSeqNo();
+				currentInstructionSeqNum = indiviualInstructionQueue.peek()
+						.getSeqNo();
 				try {
 					Message newMessage = messageQueue[procNum].take();
-					// Check if the incoming message indicates whether its a new coordinator then change your Cid.
-					if(checkIfCurrentInstructionRevive(currentInstruction)){
-						//Call the revive method on the process
-					}
-					else if(compareInstructionToMessage(currentInstruction, newMessage)){
-						if(currentInstruction.getSeqNo() == minSeqNumber){
-							sendInstructionToProcess(currentInstruction, newMessage); 
-							incrementNextInstructionSequenceNum();
-						}
-						while(currentInstruction.getSeqNo() == minSeqNumber){}
-						sendInstructionToProcess(currentInstruction, newMessage);
+					// Check if the incoming message indicates whether its a
+					// new coordinator then change your Cid.
+					checkInstructionAndUpdateCoordinatorId(newMessage);
+					
+					if (checkIfCurrentInstructionRevive(currentInstruction)) {
+						// TODO: Call the revive method on the process
 						incrementNextInstructionSequenceNum();
-					}
-					else{
+					} else if (compareInstructionToMessage(currentInstruction,
+							newMessage)) {
+						while (currentInstruction.getSeqNo() == minSeqNumber) {
+						}
+						// Send the instruction to process
+						sendInstructionToProcess(currentInstruction,
+								newMessage);
+						
+					} else {
 						// Send Continue
+						sendContinueToProcess(newMessage);
 					}
-						
-						
+					
+
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+					config.logger.log(Level.WARNING,
+							"Interrupted wait on message for proc " + procNum);
 				}
-				config.logger.info("Cuurent inst being executed by conroller for "+procNum + ": "+currentInstruction.toString()+" Seq No:"+currentInstructionSeqNum);
+				config.logger
+						.info("Cuurent inst being executed by conroller for "
+								+ procNum + ": " + currentInstruction.toString()
+								+ " Seq No:" + currentInstructionSeqNum);
 			}
-			// Wait for any other messages.
+			boolean hasProcessDecided = false;
+			while (hasProcessDecided) {
+				try {
+					Message m = messageQueue[procNum].take();
+					hasProcessDecided = checkIfProcessHasDecided(m);
+				} catch (InterruptedException e) {
+					config.logger.log(Level.WARNING,
+							"Interrupted wait on decision message for proc "
+									+ procNum);
+				}
+			}
 		}
 
+		/**
+		 * Send a continue instruction to a process.
+		 * @param newMessage
+		 */
+		private void sendContinueToProcess(Message newMessage) {
+			// Only the instruction type matters. All others are dummy values. 
+			newMessage.setInstr(new Instruction(InstructionType.CONTINUE,
+					"", 
+					NotificationType.DELIVER, 
+					ActionType.ACK,
+					-1, procNum, -1));
+			// Check
+			newMessage.setDest(newMessage.getSrc());
+			newMessage.setDestType(newMessage.getSrcType());
+			newMessage.setSrc(0);
+			newMessage.setSrcType(NodeType.CONTROLLER);
+			nc.sendMsg(procNum, newMessage);
+		}
+
+		/**
+		 * Check whether the message is a state req before sending from the new coordinator 
+		 * and update your coordinator value.
+		 * @param m
+		 */
+		private void checkInstructionAndUpdateCoordinatorId(
+				Message m) {
+			if(m.getAction().getType() == ActionType.STATE_REQ && m.getNotificationType() == NotificationType.SEND){
+				currentCoordinatorId = m.getSrc();
+			}
+		}
+
+		/**
+		 * Check if a process has sent a decision message. 
+		 * Use this in deciding whether you have to finish this transaction.
+		 * @param m
+		 * @return
+		 */
+		private boolean checkIfProcessHasDecided(Message m) {
+			// TODO Auto-generated method stub
+			boolean decisionTaken = m.getAction().getType() == ActionType.DECISION;
+			if(decisionTaken){
+				config.logger.info("Process "+procNum+ " has decided "+m.getAction().getType());
+			}
+			return decisionTaken;
+		}
+		
+		/**
+		 * Check whether the current instruction is revive.
+		 * @param currentInstruction
+		 * @return
+		 */
 		private boolean checkIfCurrentInstructionRevive(
 				Instruction currentInstruction) {
-			// TODO Auto-generated method stub
-			return false;
-		}
-
-		private boolean checkIfCurrentInstructionHalt(
-				Instruction currentInstruction) {
-			// TODO Auto-generated method stub
-			return false;
+			return (currentInstruction.getInstructionType() == InstructionType.REVIVE);
 		}
 	}
-	
-	
-	public static void main(String[] args){
-		String[] s = {"config_p0.txt", "config_p1.txt", "config_p2.txt", "config_p3.txt", "config_p4.txt"};
+
+	public static void main(String[] args) {
+		String[] s = { "config_p0.txt", "config_p1.txt", "config_p2.txt",
+				"config_p3.txt", "config_p4.txt" };
 		Controller controller = new Controller(s);
 	}
-	
 
 }

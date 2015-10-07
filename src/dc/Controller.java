@@ -144,6 +144,7 @@ public class Controller {
 
 	private void incrementNextInstructionSequenceNum() {
 		++minSeqNumber;
+		config.logger.info("Updated Seq no to : "+minSeqNumber);
 	}
 
 	/**
@@ -207,7 +208,7 @@ public class Controller {
 	private boolean[] decisionReached;
 
 	private long getCurrentTime() {
-		return System.currentTimeMillis() + 3000;
+		return System.currentTimeMillis();
 	}
 
 	private class SendHandler extends Thread {
@@ -262,15 +263,18 @@ public class Controller {
 			m.setSrcType(NodeType.CONTROLLER);
 			m.setSrc(0);
 			m.setInstr(i);
+			config.logger.info("Detected halt");
 			for(int i1=1; i1 < config.numProcesses; i1++){
 				m.setDest(i1);
 				m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
 				nc.sendMsg(i1, m);
+				config.logger.info("HALT Sent "+ m.toString() + " to "+i1);
 				if(i1 == currentCoordinatorId)
 				{
 					// Send another message to the coordinator
 					m.setDestType(NodeType.COORDINATOR);
 					nc.sendMsg(i1, m);
+					config.logger.info("HALT Sent "+ m.toString() + " to "+i1);
 				}
 			}
 			try {
@@ -280,18 +284,20 @@ public class Controller {
 				e.printStackTrace();
 			}
 			// Send resume after some halt.
-			
+			config.logger.info("Sending Resume");
 			i.setInstructionType(InstructionType.RESUME);
 			m.setInstr(i);
 			for(int i1=1; i1 < config.numProcesses; i1++){
 				m.setDest(i1);
 				m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
 				nc.sendMsg(i1, m);
+				config.logger.info("RESUME Sent "+ m.toString() + " to "+i1);
 				if(i1 == currentCoordinatorId)
 				{
 					// Send another message to the coordinator
 					m.setDestType(NodeType.COORDINATOR);
 					nc.sendMsg(i1, m);
+					config.logger.info("RESUME Sent "+ m.toString() + " to "+i1);
 				}
 			}
 		}
@@ -316,6 +322,7 @@ public class Controller {
 				m.setSrc(0);
 				m.setSrcType(NodeType.CONTROLLER);
 				nc.sendMsg(procNum, m);
+				config.logger.info("KILL Sent "+ m.toString() + " to "+procNum);
 			} else {
 				config.logger.log(Level.WARNING,
 						"Can't make out the Instruction type");
@@ -338,17 +345,20 @@ public class Controller {
 						.getSeqNo();
 				try {
 					Message newMessage = messageQueue[procNum].take();
+					config.logger.info(String.format("Controller Consumed message %s from proc %d",newMessage.toString(), procNum));
 					// Check if the incoming message indicates whether its a
 					// new coordinator then change your Cid.
 					checkInstructionAndUpdateCoordinatorId(newMessage);
 					
 					if (checkIfCurrentInstructionRevive(currentInstruction)) {
 						// TODO: Call the revive method on the process
+						config.logger.info("Detected revive instruction");
 						incrementNextInstructionSequenceNum();
 					} else if (compareInstructionToMessage(currentInstruction,
 							newMessage)) {
 						while (currentInstruction.getSeqNo() == minSeqNumber) {
 						}
+						config.logger.info("Executing instruction with seq no "+ currentInstruction.getSeqNo());
 						// Send the instruction to process
 						sendInstructionToProcess(currentInstruction,
 								newMessage);
@@ -398,6 +408,7 @@ public class Controller {
 			newMessage.setSrc(0);
 			newMessage.setSrcType(NodeType.CONTROLLER);
 			nc.sendMsg(procNum, newMessage);
+			config.logger.info("CONTINUE Sent "+ newMessage.toString() + " to "+procNum);
 		}
 
 		/**
@@ -409,6 +420,8 @@ public class Controller {
 				Message m) {
 			if(m.getAction().getType() == ActionType.STATE_REQ && m.getNotificationType() == NotificationType.SEND){
 				currentCoordinatorId = m.getSrc();
+				config.logger.info("Updates the coordinator id to "+ currentCoordinatorId);
+				config.logger.info("Message for updating id : "+ m.toString());
 			}
 		}
 

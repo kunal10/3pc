@@ -101,7 +101,8 @@ public class Process {
         processToRemoveFromUpSet = i;
       }
 	    public void run() {
-        
+        exisitingTimers.remove(processToRemoveFromUpSet);
+        state.removeProcessFromUpset(processToRemoveFromUpSet);
       }
 	  }
     public void sendHeartBeat() {
@@ -127,7 +128,7 @@ public class Process {
       }
     }
     
-    private void addTimerToExistingTimer(TimerTask tt, int i){
+    private void addTimerToExistingTimer(int i){
       int freq = 1200;
       TimerTask tti = new ProcessKillOnTimeoutTask(i);
       exisitingTimers.put(i, tti);
@@ -152,7 +153,7 @@ public class Process {
           exisitingTimers.get(m.getSrc()).cancel();
         }
         // Add a new timer for the process which has sent a heartbeat
-        
+        addTimerToExistingTimer(m.getSrc());
         
         // If non participant receives a decision from some other process
         // then it records it, notifies the controller.
@@ -187,7 +188,7 @@ public class Process {
       // Timeout on freq * 2
       for (int i = 1; i < numProcesses; i++ ) {
         if(i != pId){
-          addTimerToExistingTimer(tt, i);
+          addTimerToExistingTimer(i);
         }
       }
       

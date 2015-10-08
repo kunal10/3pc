@@ -451,15 +451,21 @@ public class Process {
         } else {
           // Some processes reported committable state.
           
+          // Update state to commitable.
+          synchronized (state) {
+            state.setType(StateType.COMMITABLE);
+          }
+          // TODO : Write Commitable state to DT Log.
+          
           // Notify controller about send of PRE_COMMIT.
           notifyController(NodeType.COORDINATOR, NotificationType.SEND,
-                  ActionType.STATE_REQ, "");
+                  ActionType.PRE_COMMIT, "");
           // Wait for controller's response.
           msg = coordinatorControllerQueue.take();
           steps = msg.getInstr().getPartialSteps();
           sendPartialMsg(ActionType.PRE_COMMIT, steps);
           executeInstruction(msg);
-          
+
           // Wait for Acks from all operational processes.
           waitForParticipantMsg(ActionType.ACK);
           // TODO : Write Decision in DT Log.
@@ -608,6 +614,9 @@ public class Process {
         boolean receivedPrecommit = waitForMessage(ActionType.PRE_COMMIT);
         // Notify the controller about receipt of Precommit/Abort.
         if (receivedPrecommit) {
+          synchronized(state) {
+            state.setType(StateType.COMMITABLE);
+          }
           notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                   ActionType.PRE_COMMIT, "");
         } else {
@@ -677,23 +686,26 @@ public class Process {
     if (steps == -1) {
       steps = curUpset.length;
     }
-    for (int i = 1; i <= steps && i < curUpset.length; i++) {
-      if (i == pId || !curUpset[i]) {
-        // Ignore itself and non-operational processes and increment steps to
-        // compensate for this.
-        steps++;
+    for (int i = 1; steps > 0 && i < curUpset.length; i++) {
+      if (i == pId || !curUpset[i] || !received.containsKey(i)) {
+        // Don't send the message to the following :
+        // 1. Itself 
+        // 2. Non-operational processes
+        // 3. Processes who are not uncertain.
       }
       msg = new Message(pId, i, NodeType.COORDINATOR, NodeType.PARTICIPANT,
               action, getCurTime());
       nc.sendMsg(i, msg);
+      steps--;
     }
   }
 
   /**
    * Waits till it receives messages from all participants except itself.
+   * NOTE : Resets the received map everytime it is called.
    */
   private String waitForParticipantMsg(ActionType expAction) {
-    HashMap<Integer, String> received = new HashMap<Integer, String>();
+    received = new HashMap<Integer, String>();
     boolean receivedAllOperational = false;
     while (!receivedAllOperational) {
       if (!coordinatorQueue.isEmpty()) {
@@ -1063,6 +1075,13 @@ public class Process {
    * before starting a new transaction.
    */
   private boolean vote;
+  /**
+   * Hashmap used by coordinator to store receipt of votes/acks from other
+   * participants. This is used by sendPartialMessage for sending messages to
+   * only those processes which are uncertain (who voted "Yes" for VOTE_REQ or
+   * reported "Uncertain" for STATE_REQ)
+   */
+  private HashMap<Integer, String> received;
   /**
    * Time in milli sec when this process is started. Should be same for all the
    * processes so that their clock is synchronized.

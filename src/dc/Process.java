@@ -81,11 +81,10 @@ public class Process {
       coordinator = new Coordinator();
       coordinator.start();
     }
-
     this.type = Message.NodeType.PARTICIPANT;
     participant = new Participant();
     participant.start();
-
+    
     if (heartBeat != null) {
       heartBeat.stop();
     }
@@ -113,6 +112,8 @@ public class Process {
      * Timer to use for scheduling tasks.
      */
     Timer timer;
+    // TimerTask to send heart beats
+    TimerTask tt;
 
     public HeartBeat() {
       exisitingTimers = new HashMap<>();
@@ -137,6 +138,7 @@ public class Process {
       }
 
       public void run() {
+        config.logger.info("Detected death of "+processToRemoveFromUpSet);
         exisitingTimers.remove(processToRemoveFromUpSet);
         state.removeProcessFromUpset(processToRemoveFromUpSet);
       }
@@ -155,10 +157,10 @@ public class Process {
           Message m = null;
           if (state.getUpset()[dest]) {
             m = new Message(pId, dest, srcType, Message.NodeType.PARTICIPANT,
-                    curTime);
+                    state, curTime);
           } else {
             m = new Message(pId, dest, srcType,
-                    Message.NodeType.NON_PARTICIPANT, curTime);
+                    Message.NodeType.NON_PARTICIPANT, state, curTime);
           }
           nc.sendMsg(dest, m);
         }
@@ -166,7 +168,7 @@ public class Process {
     }
 
     private void addTimerToExistingTimer(int i) {
-      int delay = 1200;
+      int delay = 1100;
       TimerTask tti = new ProcessKillOnTimeoutTask(i);
       exisitingTimers.put(i, tti);
       timer.schedule(tti, delay);
@@ -181,8 +183,15 @@ public class Process {
      * processes.
      */
     public void processHeartBeat() {
-      while (!heartbeatQueue.isEmpty()) {
-        Message m = heartbeatQueue.remove();
+      while (true) {
+        Message m = null;
+        try {
+          m = heartbeatQueue.take();
+        } catch (InterruptedException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+        // config.logger.info("Consumed Heartbeat of "+m.getSrc());
         // Disable the timer if a timer is running for that process.
         if (exisitingTimers.containsKey(m.getSrc())) {
           exisitingTimers.get(m.getSrc()).cancel();
@@ -205,6 +214,13 @@ public class Process {
         }
       }
     }
+    
+    public void shutdownTimers(){
+      tt.cancel();
+      timer.cancel();
+      config.logger.info("Shut down timers");
+    }
+    
 
     public void run() {
       // Frequency at which heart beats are sent. Should not be too small other
@@ -216,7 +232,7 @@ public class Process {
       // On kill this timer should be killed using tt.cancel(); timer.cancel();
       // TODO: Register timer threads for killing later.
 
-      TimerTask tt = new SendHeartBeatTask();
+      tt = new SendHeartBeatTask();
       timer.schedule(tt, 0, freq);
 
       // Initialize all the timers to track heartbeat of other processes.
@@ -274,7 +290,7 @@ public class Process {
      */
     private boolean waitForVotes() throws InterruptedException {
       int receivedVotes = 0, numParticipants = numProcesses - 1;
-      while (receivedVotes < numParticipants) {
+      while (receivedVotes <= numParticipants) {
         // TODO : **BUG** We should maintain a hashmap of votes and check if
         // someone who has not voted has died. Currently even if process is
         // dying after casting its vote we are returning false from here.
@@ -548,6 +564,7 @@ public class Process {
         }
 
         // Notify the controller about receipt of VOTE_REQ.
+        config.logger.info("Notifying receipt of Vote request");
         notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                 ActionType.VOTE_REQ, "");
         // Wait for controller's response.
@@ -597,6 +614,7 @@ public class Process {
           }
           // TODO Write decision to DT Log.
           recordDecision(StateType.ABORTED);
+          config.logger.info("Received Abort for the transaction. Aborting.");
           return;
         }
 
@@ -825,6 +843,7 @@ public class Process {
     }
     switch (instr.getInstructionType()) {
       case CONTINUE:
+    	config.logger.log(Level.INFO, "Received Continue Instruction");
         break;
       case KILL:
         config.logger.log(Level.INFO, "Received Kill Instruction");
@@ -900,11 +919,13 @@ public class Process {
     }
   }
 
+  // TODO: *BUG* Kill yourself after killing other threads.
   private void kill() {
     killThread(coordinator);
-    killThread(participant);
+    //killThread(participant);
     killThread(newCoordinator);
     killThread(newParticipant);
+    heartBeat.shutdownTimers();
     killThread(heartBeat);
   }
 
@@ -998,7 +1019,7 @@ public class Process {
   private Thread participant;
   private Thread newCoordinator;
   private Thread newParticipant;
-  private Thread heartBeat;
+  private HeartBeat heartBeat;
   /**
    * Config object used for setting up NetController.
    */

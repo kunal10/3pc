@@ -113,8 +113,7 @@ public class ListenServer extends Thread {
 				}
 				conf.logger.info(String.format(
 						"Server %d: New incoming connection accepted from %s",
-						procNum, incomingSock.sock.getInetAddress()
-								.getHostName()));
+						procNum, incomingProcId));
 				incomingSock.start();
 				
 			} catch (IOException e) {

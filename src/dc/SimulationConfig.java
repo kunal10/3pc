@@ -81,8 +81,10 @@ public class SimulationConfig {
 	    		// All the remaining lines correspond to the action to be taken on each 
 	    		// process.
 	    		line = br.readLine();
+	    		int seqNo = 0;
 	    		while (line != null && line != "\n" && !line.isEmpty()) {
-	    			Instruction i = parsePerProcessInstructions(line);
+	    			Instruction i = parsePerProcessInstructions(line, seqNo);
+	    			seqNo ++;
 	    			if(i !=null){
 	    				elem.instructions.add(i);
 	    			}	
@@ -106,8 +108,8 @@ public class SimulationConfig {
 	 * 1: KILL after sending PRECOMMIT n
 	 * @return 
 	 */
-	private Instruction parsePerProcessInstructions(String line) {
-		Instruction i = Instruction.parseInstruction(line);
+	private Instruction parsePerProcessInstructions(String line, int seqNo) {
+		Instruction i = Instruction.parseInstruction(line, seqNo);
 		return i;
 	}
 

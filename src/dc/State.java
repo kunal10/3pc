@@ -16,12 +16,20 @@ public class State {
   }
   
   public enum StateType { UNCERTAIN, COMMITABLE, COMMITED, ABORTED }; 
-  
+  public boolean isTerminalState() {
+    return (type == StateType.COMMITED || type == StateType.ABORTED);
+  } 
+  public void setType(StateType st) {
+    type = st;
+  }
   public StateType getType() {
     return type;
   }
   public boolean[] getUpset() {
     return upset;
+  }
+  public void removeProcessFromUpset(int i){
+    upset[i] = false;
   }
   
   private StateType type;

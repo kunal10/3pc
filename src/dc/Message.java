@@ -6,7 +6,43 @@ import java.io.Serializable;
  * Class which captures messages exchanged in the network. 
  */
 public class Message implements Serializable  {
-  /**
+  public Instruction getInstr() {
+		return instr;
+	}
+
+	public void setInstr(Instruction instr) {
+		this.instr = instr;
+	}
+
+	public void setSrc(int src) {
+		this.src = src;
+	}
+
+	public void setDest(int dest) {
+		this.dest = dest;
+	}
+
+	public void setSrcType(NodeType srcType) {
+		this.srcType = srcType;
+	}
+	
+	public void setDestType(NodeType destType) {
+    this.destType = destType;
+  }
+
+	public void setAction(Action action) {
+		this.action = action;
+	}
+
+	public void setState(State state) {
+		this.state = state;
+	}
+
+	public void setTime(long time) {
+		this.time = time;
+	}
+
+/**
    * Nodes of message are classified on the basis of type of source and
    * destination. Currently we have following kinds of nodes:
    * 
@@ -37,8 +73,8 @@ public class Message implements Serializable  {
   }
   
   /** 
-   * Should be used only by non-heartbeat messages. State is null and Action is 
-   * non null
+   * Should be used only by processes for sending action or state(when decision
+   * has been made).
    */
   public Message(int src, int dest, NodeType srcType, NodeType destType,
                  Action action, long time) {
@@ -47,8 +83,8 @@ public class Message implements Serializable  {
   }
   
   /** 
-   * Should be used only by non-heartbeat messages. State is null and Action is 
-   * non null
+   * Should be used only by controller for sending instruction messages. 
+   * State and Action may be null.
    */
   public Message(int src, int dest, NodeType srcType, NodeType destType,
                  Instruction instr, long time) {
@@ -94,9 +130,6 @@ public class Message implements Serializable  {
   public Action getAction() {
     return action;
   }
-  public Instruction getInstruction() {
-    return instr;
-  }
   public State getState() {
     return state;
   }
@@ -118,6 +151,7 @@ public class Message implements Serializable  {
   private int dest;
   private NodeType srcType;
   private NodeType destType;
+
   private Action action;
   private Instruction instr;
   private State state;

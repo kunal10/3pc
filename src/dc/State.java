@@ -47,7 +47,7 @@ public class State implements Serializable{
   }
   
   public static State parseState(String s) throws Exception{
-    String[] split = s.split(":");
+    String[] split = s.split("#");
     State parsedState = null;
     if(split.length != 2){
       throw new Exception("Error in parsing state : "+s);

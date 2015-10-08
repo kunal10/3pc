@@ -12,6 +12,8 @@ import java.util.logging.Level;
 import dc.State.StateType;
 import ut.distcomp.framework.Config;
 
+import dc.State.StateType;
+
 /**
  * Format of DT Log :
  * Start Transaction
@@ -22,6 +24,7 @@ import ut.distcomp.framework.Config;
  *
  */
 public class DTLog {
+
 
   public DTLog(Config config) {
     super();
@@ -90,6 +93,7 @@ public class DTLog {
    * Write the playlist into the DT log.
    * @param pl
    */
+
   public void writePlaylist(Playlist pl){
     try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
       // TODO: Check if there is a decision already for that transaction
@@ -157,7 +161,7 @@ public class DTLog {
   }
   
   /*
-   * Config for the process owning this DT log.
+   * Config for the given process.
    */
   private Config config;
 }

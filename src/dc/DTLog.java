@@ -29,8 +29,41 @@ public class DTLog {
     this.fileName = fileName;
   }
   
+  /**
+   * Parse the DT Log and return the state of the process.
+   * @return
+   */
   public State retrieveProcessState(){
     return null;
+  }
+  
+  /**
+   * Write a start transaction line.
+   */
+  public void writeStartTransaction(){
+    
+  }
+  
+  /**
+   * Write an end transaction line.
+   */
+  public void writeEndTransaction(){
+    
+  }
+  
+  /**
+   * Write the decision taken by a process for a transaction.
+   * @param decision
+   */
+  public void writeDecision(String decision){
+    
+  }
+  
+  /**
+   * Write the state of the process. Should be written everytime the state changes.
+   * @param s
+   */
+  public void writeState(State s){
     
   }
   /**

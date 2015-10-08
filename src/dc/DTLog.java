@@ -1,5 +1,10 @@
 package dc;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+
 /**
  * Format of DT Log :
  * Start Transaction
@@ -11,7 +16,7 @@ package dc;
  */
 public class DTLog {
 
-  public DTLog(int processId, int fileName) {
+  public DTLog(int processId, String fileName) {
     super();
     this.processId = processId;
     this.fileName = fileName;
@@ -22,10 +27,10 @@ public class DTLog {
   public void setProcessId(int processId) {
     this.processId = processId;
   }
-  public int getFileName() {
+  public String getFileName() {
     return fileName;
   }
-  public void setFileName(int fileName) {
+  public void setFileName(String fileName) {
     this.fileName = fileName;
   }
   
@@ -41,14 +46,22 @@ public class DTLog {
    * Write a start transaction line.
    */
   public void writeStartTransaction(){
-    
+    try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(fileName, true)))) {
+      out.println("Start Transaction");
+    }catch (IOException e) {
+        // Handle
+    }
   }
   
   /**
    * Write an end transaction line.
    */
   public void writeEndTransaction(){
-    
+    try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(fileName, true)))) {
+      out.println("End Transaction");
+    }catch (IOException e) {
+        // Handle
+    }
   }
   
   /**
@@ -56,7 +69,12 @@ public class DTLog {
    * @param decision
    */
   public void writeDecision(String decision){
-    
+    try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(fileName, true)))) {
+      // TODO: Check if there is a decision already for that transaction
+      out.println("Decision :"+decision);
+    }catch (IOException e) {
+        // Handle
+    }
   }
   
   /**
@@ -73,5 +91,5 @@ public class DTLog {
   /**
    * File name of the DT log.
    */
-  private int fileName;
+  private String fileName;
 }

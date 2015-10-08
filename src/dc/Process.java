@@ -84,7 +84,7 @@ public class Process {
     this.type = Message.NodeType.PARTICIPANT;
     participant = new Participant();
     participant.start();
-    
+
     if (heartBeat != null) {
       heartBeat.stop();
     }
@@ -138,7 +138,7 @@ public class Process {
       }
 
       public void run() {
-        config.logger.info("Detected death of "+processToRemoveFromUpSet);
+        config.logger.info("Detected death of " + processToRemoveFromUpSet);
         exisitingTimers.remove(processToRemoveFromUpSet);
         state.removeProcessFromUpset(processToRemoveFromUpSet);
       }
@@ -205,22 +205,18 @@ public class Process {
           dc.State s = m.getState();
           if (s.isTerminalState()) {
             recordDecision(s.getType());
-            updatePlaylist();
-            notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
-                    ActionType.DECISION, s.getType().name());
             // Return since we don't need to process any more messages.
             return;
           }
         }
       }
     }
-    
-    public void shutdownTimers(){
+
+    public void shutdownTimers() {
       tt.cancel();
       timer.cancel();
       config.logger.info("Shut down timers");
     }
-    
 
     public void run() {
       // Frequency at which heart beats are sent. Should not be too small other
@@ -429,7 +425,7 @@ public class Process {
 
         // Wait for state report message from all participants.
         // Ignore the ones who have died since send of STATE_REQ.
-        String stateReport = waitForParticipantMsg(ActionType.STATE_REQ);
+        String stateReport = waitForParticipantMsg(ActionType.STATE_RES);
         StateType reportedSt = StateType.valueOf(stateReport);
         StateType coordSt = state.getType();
         if (dc.State.isTerminalStateType(reportedSt)
@@ -438,24 +434,39 @@ public class Process {
           if (coordSt == StateType.UNCERTAIN) {
             // Write Decision in DT Log.
             recordDecision(reportedSt);
-            updatePlaylist();
           } else {
             // Updated reported state with coordinator's state.
             reportedSt = coordSt;
           }
-          // Notify controller that coordinator is going to send decision.
+          // Notify controller and send the decision.
+          notifyAndSendDecision(reportedSt);
+        } else if (reportedSt == StateType.UNCERTAIN
+                && coordSt == StateType.UNCERTAIN) {
+          // All participants and the coordinator are uncertain so abort.
+          reportedSt = StateType.ABORTED;
+          // TODO : Write Decision in DT Log.
+          recordDecision(reportedSt);
+          // Notify controller and send the decision.
+          notifyAndSendDecision(reportedSt);
+        } else {
+          // Some processes reported committable state.
+          
+          // Notify controller about send of PRE_COMMIT.
           notifyController(NodeType.COORDINATOR, NotificationType.SEND,
-                  ActionType.DECISION, reportedSt.name());
+                  ActionType.STATE_REQ, "");
           // Wait for controller's response.
           msg = coordinatorControllerQueue.take();
           steps = msg.getInstr().getPartialSteps();
-          sendDecision(reportedSt, steps);
+          sendPartialMsg(ActionType.PRE_COMMIT, steps);
           executeInstruction(msg);
-          return;
+          
+          // Wait for Acks from all operational processes.
+          waitForParticipantMsg(ActionType.ACK);
+          // TODO : Write Decision in DT Log.
+          recordDecision(StateType.COMMITED);
+          // Notify controller and send the decision.
+          notifyAndSendDecision(reportedSt);
         }
-
-        // All participants and the coordinator are uncertain.
-
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
@@ -614,7 +625,6 @@ public class Process {
           }
           // TODO Write decision to DT Log.
           recordDecision(StateType.ABORTED);
-          config.logger.info("Received Abort for the transaction. Aborting.");
           return;
         }
 
@@ -647,7 +657,6 @@ public class Process {
         }
         // TODO Write Commit to DT Log.
         recordDecision(StateType.COMMITED);
-        updatePlaylist();
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
@@ -719,13 +728,13 @@ public class Process {
     // action.
     String result = "";
     for (Integer key : received.keySet()) {
-      if (expAction == ActionType.DECISION) {
+      if (expAction == ActionType.STATE_RES) {
         result = StateType.UNCERTAIN.name();
         StateType st = StateType.valueOf(received.get(key));
-        if (st == StateType.COMMITED || st == StateType.ABORTED) {
+        if (State.isTerminalStateType(st)) {
           return st.name();
         }
-      } else if (expAction == ActionType.VOTE_REQ) {
+      } else if (expAction == ActionType.VOTE_RES) {
         result = "Yes";
         if (received.get(key).compareToIgnoreCase("No") == 0) {
           return "No";
@@ -748,12 +757,19 @@ public class Process {
   }
 
   /**
-   * Write the decision to DT Log and update the state.
+   * Record the decision and update the state if decision is commit.
    */
   private void recordDecision(StateType st) {
-    // Log decision to DT log.
     synchronized (state) {
       state.setType(st);
+      if (st == StateType.COMMITED) {
+        updatePlaylist();
+      }
+      config.logger.log(Level.INFO,
+              "Reached Decision : " + st.name() + " for current transaction.");
+      // Notify the controller about the decision.
+      notifyController(type, NotificationType.RECEIVE, ActionType.DECISION,
+              st.name());
     }
   }
 
@@ -790,6 +806,26 @@ public class Process {
         nc.sendMsg(dest, msg);
       }
     }
+  }
+
+  private void notifyAndSendDecision(StateType st) {
+    // Notify controller that coordinator is going to send decision.
+    notifyController(NodeType.COORDINATOR, NotificationType.SEND,
+            ActionType.DECISION, st.name());
+    // Wait for controller's response.
+    Message msg = null;
+    try {
+      msg = coordinatorControllerQueue.take();
+    } catch (InterruptedException e) {
+      config.logger.log(Level.SEVERE,
+              "Received Interrupt waiting for controller on SEND DECISION");
+      e.printStackTrace();
+      return;
+    }
+    int steps = msg.getInstr().getPartialSteps();
+    sendDecision(st, steps);
+    executeInstruction(msg);
+    return;
   }
 
   /**
@@ -843,7 +879,7 @@ public class Process {
     }
     switch (instr.getInstructionType()) {
       case CONTINUE:
-    	config.logger.log(Level.INFO, "Received Continue Instruction");
+        config.logger.log(Level.INFO, "Received Continue Instruction");
         break;
       case KILL:
         config.logger.log(Level.INFO, "Received Kill Instruction");
@@ -919,14 +955,12 @@ public class Process {
     }
   }
 
-  // TODO: *BUG* Kill yourself after killing other threads.
   private void kill() {
-    killThread(coordinator);
-    //killThread(participant);
-    killThread(newCoordinator);
-    killThread(newParticipant);
     heartBeat.shutdownTimers();
     killThread(heartBeat);
+    killThread(coordinator);
+    killThread(newCoordinator);
+    killThread(newParticipant);
   }
 
   /**

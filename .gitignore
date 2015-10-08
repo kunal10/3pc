@@ -10,6 +10,12 @@ local.properties
 .settings/
 .loadpath
 
+# Log files.
+*Log*.txt
+
+# Configs
+*SimulationConfig*
+
 # Eclipse Core
 .project
 

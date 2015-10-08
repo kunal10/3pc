@@ -42,7 +42,7 @@ public class Process {
 
     coordinatorQueue = new LinkedBlockingQueue<>();
     coordinatorControllerQueue = new LinkedBlockingQueue<>();
-
+    
     this.config = config;
 
     // Initialize Net Controller. Pass all the queues required.
@@ -56,7 +56,43 @@ public class Process {
     this.vote = true;
     this.startTime = startTime;
   }
-
+  
+  /**
+   * This method should be called by controller before sending a start message
+   * for a new transaction.
+   * 
+   * @param t
+   * @param vote
+   */
+  public void initTransaction(Transaction t, boolean vote) {
+    this.transaction = t;
+    this.vote = vote;
+    // The value at index 0 will be irrelevant since 0 corresponds to the
+    // controller process.
+    boolean[] upset = new boolean[this.numProcesses];
+    for (int i = 0; i < upset.length; i++) {
+      upset[i] = true;
+    }
+    this.state = new State(State.StateType.UNCERTAIN, upset);
+    // cId should be set to first process whenever the process gets involved in
+    // a new transaction.
+    this.cId = 1;
+    if (pId == 1) {
+      this.type = Message.NodeType.COORDINATOR;
+      coordinator = new Coordinator();
+      coordinator.start();
+    } else {
+      this.type = Message.NodeType.PARTICIPANT;
+      participant = new Participant();
+      participant.start();
+    }
+    if (heartBeat != null) {
+      heartBeat.stop();
+    }
+    heartBeat = new HeartBeat();
+    heartBeat.start();
+  }
+  
   /**
    * This thread is used for sending periodic heart beats to every process in
    * the network. Every heart beat contains the state of the process at the time
@@ -84,9 +120,7 @@ public class Process {
     }
 
     /**
-     * 
-     * @author av28895
-     *         Timer task to schedule send of heart beat regularly.
+     * Timer task to schedule send of heart beat regularly.
      */
     class SendHeartBeatTask extends TimerTask {
       public void run() {
@@ -435,7 +469,7 @@ public class Process {
         if (!receivedVoteReq) {
           if (pId == cId) {
             // Coordinator thread takes the decision and updates the playlist.
-            // Although this should never happen if Coordinator is alive in 
+            // Although this should never happen if Coordinator is alive in
             // which case we will never reach here.
             return;
           }
@@ -534,33 +568,6 @@ public class Process {
 
   public Transaction getTransaction() {
     return transaction;
-  }
-
-  /**
-   * This method should be called by controller before sending a start message
-   * for a new transaction.
-   * 
-   * @param t
-   * @param vote
-   */
-  public void initTransaction(Transaction t, boolean vote) {
-    this.transaction = t;
-    this.vote = vote;
-    // The value at index 0 will be irrelevant since 0 corresponds to the
-    // controller process.
-    boolean[] upset = new boolean[this.numProcesses];
-    for (int i = 0; i < upset.length; i++) {
-      upset[i] = true;
-    }
-    this.state = new State(State.StateType.UNCERTAIN, upset);
-    // cId should be set to first process whenever the process gets involved in
-    // a new transaction.
-    this.cId = 1;
-    if (pId == 1) {
-      this.type = Message.NodeType.COORDINATOR;
-    } else {
-      this.type = Message.NodeType.PARTICIPANT;
-    }
   }
 
   /**
@@ -702,6 +709,7 @@ public class Process {
     return numAliveParticipiants() == (numProcesses - 1);
   }
 
+  // TODO Add a aliveSet for this. Upset is not same as alive set.
   private boolean isAlive(int procId) {
     return state.getUpset()[procId];
   }
@@ -799,6 +807,17 @@ public class Process {
    * Queue for storing all messages sent to coordinator by controller
    */
   private BlockingQueue<Message> coordinatorControllerQueue;
+  /**
+   * Different threads which might be spawned by a process during a transaction.
+   * All threads except the heartBeat are stopped on reaching a decision.
+   * heartBeat thread of a previous transaction(if it exists) is stopped on 
+   * receipt of new initTransaction.
+   */
+  private Thread coordinator;
+  private Thread participant;
+  private Thread newCoordinator;
+  private Thread newParticipant;
+  private Thread heartBeat;
   /**
    * Config object used for setting up NetController.
    */

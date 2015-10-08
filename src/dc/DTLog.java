@@ -107,7 +107,11 @@ public class DTLog {
       String line = br.readLine();
       while(line != null){
         if(line.startsWith("Start")){
-          rs.state.setUpset(new boolean[config.numProcesses - 1]);
+          boolean[] b = new boolean[config.numProcesses - 1];
+          for (int i = 0; i < b.length; i++) {
+            b[i] = true;
+          }
+          rs.state.setUpset(b);
           rs.state.setType(StateType.UNCERTAIN);
           rs.decision = "";
           config.logger.info("Start DT : "+ rs.toString());
@@ -121,7 +125,7 @@ public class DTLog {
         }
         else if(line.startsWith("State")){
           try {
-            rs.state = State.parseState(line.split(":")[1]);
+            rs.state = new State(State.parseState(line.split(":")[1]));
             config.logger.info("State DT : "+ rs.toString());
           } catch (Exception e) {
             config.logger.info("Couldn't parse state");

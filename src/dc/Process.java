@@ -32,6 +32,9 @@ public class Process {
     this.pId = pId;
     // TODO : Populate this from DT Log in case of recovery.
     this.playlist = new Playlist();
+    
+    // Initialize DT Log 
+    dtLog = new DTLog(config);
 
     // Initialize all Blocking queues
     // TODO : Figure out if these should be initialized before all transactions.
@@ -92,6 +95,10 @@ public class Process {
     }
     heartBeat = new HeartBeat();
     heartBeat.start();
+  }
+  
+  public void reviveProcessState(Transaction t, boolean vote){
+    
   }
 
   /**
@@ -1267,4 +1274,9 @@ public class Process {
    * NOTE : If process dies and recovers after that, startTime will remain same.
    */
   private long startTime;
+  
+  /**
+   * DT Log handle for this process.
+   */
+  private DTLog dtLog;
 }

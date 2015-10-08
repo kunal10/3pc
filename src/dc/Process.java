@@ -89,7 +89,7 @@ public class Process {
       heartBeat.stop();
     }
     heartBeat = new HeartBeat();
-    heartBeat.start();
+    //heartBeat.start();
   }
 
   /**
@@ -547,6 +547,7 @@ public class Process {
         }
 
         // Notify the controller about receipt of VOTE_REQ.
+        config.logger.info("Notifying receipt of Vote request");
         notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                 ActionType.VOTE_REQ, "");
         // Wait for controller's response.

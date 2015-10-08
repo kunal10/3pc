@@ -114,6 +114,9 @@ public class NetController {
 			if (outSockets[process] == null)
 				initOutgoingConn(process);
 			outSockets[process].sendMsg(msg);
+			if(!msg.isHeartbeatMessage()){
+				config.logger.info("Sent "+msg.toString()+" to "+process);
+			}
 		} catch (IOException e) { 
 			if (outSockets[process] != null) {
 				outSockets[process].cleanShutdown();

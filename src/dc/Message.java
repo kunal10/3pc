@@ -102,16 +102,16 @@ public class Message implements Serializable  {
   public String toString() {
     StringBuilder result = new StringBuilder();
     result.append("Src: " + src);
-    result.append("Dest: " + dest);
-    result.append("SrcType: " + srcType.name());
-    result.append("DestType: " + destType.name());
+    result.append(" Dest: " + dest);
+    result.append(" SrcType: " + srcType.name());
+    result.append(" DestType: " + destType.name());
     if (instr != null)
-      result.append("Instr: " + instr.toString());
+      result.append(" Instr: " + instr.toString());
     if (action != null)
-      result.append("Action: " + action.toString());
+      result.append(" Action: " + action.toString());
     if (state != null)
-      result.append("State: " + state.toString());
-    result.append("Time: " + time);
+      result.append(" State: " + state.toString());
+    //result.append("Time: " + time);
     return result.toString();
   }
   

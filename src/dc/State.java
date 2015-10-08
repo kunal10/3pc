@@ -1,6 +1,8 @@
 package dc;
 
-public class State {
+import java.io.Serializable;
+
+public class State implements Serializable{
   /**
    * @param type
    * @param upset

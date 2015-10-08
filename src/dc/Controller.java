@@ -369,7 +369,7 @@ public class Controller {
             incrementNextInstructionSequenceNum();
           } else
             if (compareInstructionToMessage(currentInstruction, newMessage)) {
-            while (currentInstruction.getSeqNo() == minSeqNumber) {
+            while (currentInstruction.getSeqNo() != minSeqNumber) {
             }
             config.logger.info("Executing instruction with seq no "
                     + currentInstruction.getSeqNo());

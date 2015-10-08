@@ -166,7 +166,7 @@ public class Process {
     }
 
     private void addTimerToExistingTimer(int i) {
-      int delay = 1200;
+      int delay = 1100;
       TimerTask tti = new ProcessKillOnTimeoutTask(i);
       exisitingTimers.put(i, tti);
       timer.schedule(tti, delay);
@@ -281,7 +281,7 @@ public class Process {
      */
     private boolean waitForVotes() throws InterruptedException {
       int receivedVotes = 0, numParticipants = numProcesses - 1;
-      while (receivedVotes < numParticipants) {
+      while (receivedVotes <= numParticipants) {
         // TODO : **BUG** We should maintain a hashmap of votes and check if
         // someone who has not voted has died. Currently even if process is
         // dying after casting its vote we are returning false from here.

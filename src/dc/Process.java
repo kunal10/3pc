@@ -89,7 +89,7 @@ public class Process {
       heartBeat.stop();
     }
     heartBeat = new HeartBeat();
-    //heartBeat.start();
+    heartBeat.start();
   }
 
   /**
@@ -136,6 +136,7 @@ public class Process {
       }
 
       public void run() {
+        config.logger.info("Detected death of "+processToRemoveFromUpSet);
         exisitingTimers.remove(processToRemoveFromUpSet);
         state.removeProcessFromUpset(processToRemoveFromUpSet);
       }
@@ -154,10 +155,10 @@ public class Process {
           Message m = null;
           if (state.getUpset()[dest]) {
             m = new Message(pId, dest, srcType, Message.NodeType.PARTICIPANT,
-                    curTime);
+                    state, curTime);
           } else {
             m = new Message(pId, dest, srcType,
-                    Message.NodeType.NON_PARTICIPANT, curTime);
+                    Message.NodeType.NON_PARTICIPANT, state, curTime);
           }
           nc.sendMsg(dest, m);
         }
@@ -165,7 +166,7 @@ public class Process {
     }
 
     private void addTimerToExistingTimer(int i) {
-      int delay = 1200;
+      int delay = 3000;
       TimerTask tti = new ProcessKillOnTimeoutTask(i);
       exisitingTimers.put(i, tti);
       timer.schedule(tti, delay);
@@ -180,8 +181,15 @@ public class Process {
      * processes.
      */
     public void processHeartBeat() {
-      while (!heartbeatQueue.isEmpty()) {
-        Message m = heartbeatQueue.remove();
+      while (true) {
+        Message m = null;
+        try {
+          m = heartbeatQueue.take();
+        } catch (InterruptedException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+        config.logger.info("Consumed Heartbeat of "+m.getSrc());
         // Disable the timer if a timer is running for that process.
         if (exisitingTimers.containsKey(m.getSrc())) {
           exisitingTimers.get(m.getSrc()).cancel();

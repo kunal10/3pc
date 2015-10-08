@@ -116,7 +116,7 @@ public class DTLog {
           config.logger.info("End DT : "+ rs.toString());
         }
         else if(line.startsWith("Decision")){
-          rs.decision = line.split(":")[1];
+          rs.decision = line.split(":")[1]; 
           config.logger.info("Decision DT : "+ rs.toString());
         }
         else if(line.startsWith("State")){

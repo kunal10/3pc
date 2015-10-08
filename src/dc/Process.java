@@ -41,7 +41,7 @@ public class Process {
 
     coordinatorQueue = new LinkedBlockingQueue<>();
     coordinatorControllerQueue = new LinkedBlockingQueue<>();
-    
+
     this.config = config;
 
     // Initialize Net Controller. Pass all the queues required.
@@ -55,7 +55,7 @@ public class Process {
     this.vote = true;
     this.startTime = startTime;
   }
-  
+
   /**
    * This method should be called by controller before sending a start message
    * for a new transaction.
@@ -80,18 +80,19 @@ public class Process {
       this.type = Message.NodeType.COORDINATOR;
       coordinator = new Coordinator();
       coordinator.start();
-    } else {
-      this.type = Message.NodeType.PARTICIPANT;
-      participant = new Participant();
-      participant.start();
     }
+
+    this.type = Message.NodeType.PARTICIPANT;
+    participant = new Participant();
+    participant.start();
+
     if (heartBeat != null) {
       heartBeat.stop();
     }
     heartBeat = new HeartBeat();
     heartBeat.start();
   }
-  
+
   /**
    * This thread is used for sending periodic heart beats to every process in
    * the network. Every heart beat contains the state of the process at the time
@@ -274,6 +275,9 @@ public class Process {
     private boolean waitForVotes() throws InterruptedException {
       int receivedVotes = 0, numParticipants = numProcesses - 1;
       while (receivedVotes < numParticipants) {
+        // TODO : **BUG** We should maintain a hashmap of votes and check if
+        // someone who has not voted has died. Currently even if process is
+        // dying after casting its vote we are returning false from here.
         if (!allParticipantsAlive()) {
           return false;
         }
@@ -341,7 +345,7 @@ public class Process {
         // Wait for controller's response.
         msg = coordinatorControllerQueue.take();
         executeInstruction(msg);
-        
+
         // If some participant died before voting or voted No, abort.
         if (!overalVote) {
           // TODO : Write Abort in DT Log.
@@ -357,7 +361,7 @@ public class Process {
           executeInstruction(msg);
           return;
         }
-        
+
         // Everyone voted Yes.
         // Notify controller that coordinator is going to send Precommit.
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
@@ -390,6 +394,56 @@ public class Process {
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
+    }
+  }
+
+  class NewCoordinator extends Thread {
+    public void run() {
+      Message msg = null;
+      int steps = -1;
+      try {
+        // Notify controller about send of STATE_REQ.
+        notifyController(NodeType.COORDINATOR, NotificationType.SEND,
+                ActionType.STATE_REQ, "");
+        // Wait for controller's response.
+        msg = coordinatorControllerQueue.take();
+        steps = msg.getInstr().getPartialSteps();
+        sendPartialMsg(ActionType.STATE_REQ, steps);
+        executeInstruction(msg);
+
+        // Wait for state report message from all participants.
+        // Ignore the ones who have died since send of STATE_REQ.
+        String stateReport = waitForParticipantMsg(ActionType.STATE_REQ);
+        StateType reportedSt = StateType.valueOf(stateReport);
+        StateType coordSt = state.getType(); 
+        if (reportedSt != StateType.UNCERTAIN || 
+                coordSt != StateType.UNCERTAIN) {
+          // If coordinator had not reached a decision before then it records it
+          if (coordSt == StateType.UNCERTAIN) {
+            // Write Decision in DT Log.
+            recordDecision(reportedSt);
+            updatePlaylist();
+          } else {
+            // Updated reported state with coordinator's state.
+            reportedSt = coordSt;
+          }
+          // Notify controller that coordinator is going to send decision.
+          notifyController(NodeType.COORDINATOR, NotificationType.SEND,
+                  ActionType.DECISION, reportedSt.name());
+          // Wait for controller's response.
+          msg = coordinatorControllerQueue.take();
+          steps = msg.getInstr().getPartialSteps();
+          sendDecision(reportedSt, steps);
+          executeInstruction(msg);
+          return;
+        }
+        
+        // All participants are uncertain.
+        // TODO Handle this case.
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+      return;
     }
   }
 
@@ -434,7 +488,7 @@ public class Process {
     private boolean waitForMessage(ActionType expAction) {
       while (true) {
         if (expAction == ActionType.VOTE_REQ) {
-          if (Process.this.isAlive(cId)) {
+          if (!Process.this.isAlive(cId)) {
             config.logger.log(Level.INFO, "Detected death of Coordinator: "
                     + cId + " while waiting for VOTE_REQ");
             return false;
@@ -582,8 +636,93 @@ public class Process {
     }
   }
 
-  public synchronized State getState() {
-    return state;
+  /**
+   * Send partial/full message depending on number of specified steps.
+   * Does not send message to itself and non operational processes.
+   * 
+   * @param at
+   * @param steps
+   */
+  private void sendPartialMsg(ActionType at, int steps) {
+    Message msg = null;
+    Action action = new Action(at, "");
+    boolean[] curUpset = getUpset();
+    if (steps == -1) {
+      steps = curUpset.length;
+    }
+    for (int i = 1; i <= steps && i < curUpset.length; i++) {
+      if (i == pId || !curUpset[i]) {
+        // Ignore itself and non-operational processes and increment steps to
+        // compensate for this.
+        steps++;
+      }
+      msg = new Message(pId, i, NodeType.COORDINATOR, NodeType.PARTICIPANT,
+              action, getCurTime());
+      nc.sendMsg(i, msg);
+    }
+  }
+
+  /**
+   * Waits till it receives messages from all participants except itself.
+   */
+  private String waitForParticipantMsg(ActionType expAction) {
+    HashMap<Integer, String> received = new HashMap<Integer, String>();
+    boolean receivedAllOperational = false;
+    while (!receivedAllOperational) {
+      if (!coordinatorQueue.isEmpty()) {
+        // Consume message and add to the hashmap.
+        Message msg = coordinatorQueue.remove();
+        ActionType receivedAction = msg.getAction().getType();
+        if (receivedAction != expAction) {
+          config.logger.log(Level.SEVERE,
+                  "Expecting : " + expAction.name() + "Received : "
+                          + receivedAction + " from process: " + msg.getSrc());
+        }
+        // Received expected message from the participant.
+        received.put(msg.getSrc(), msg.getAction().getValue());
+        config.logger.log(Level.INFO, "Received " + expAction.name()
+                + " from process: " + msg.getSrc());
+      }
+      boolean[] curUpset = getUpset();
+      receivedAllOperational = true;
+      for (int i = 1; i < curUpset.length; i++) {
+        // Won't receive a message from itself.
+        if (i == pId) {
+          continue;
+        }
+        // If process is still operational but not received the message then
+        // continue waiting.
+        if (curUpset[i] && !received.containsKey(i)) {
+          receivedAllOperational = false;
+        }
+      }
+    }
+    // Iterate over the hash map and return value appropriate for specified
+    // action.
+    String result = "";
+    for (Integer key : received.keySet()) {
+      if (expAction == ActionType.DECISION) {
+        result = StateType.UNCERTAIN.name();
+        StateType st = StateType.valueOf(received.get(key));
+        if (st == StateType.COMMITED || st == StateType.ABORTED) {
+          return st.name();
+        }
+      } else if (expAction == ActionType.VOTE_REQ) {
+        result = "Yes";
+        if (received.get(key).compareToIgnoreCase("No") == 0) {
+          return "No";
+        }
+      } else if (expAction == ActionType.ACK) {
+        return result;
+      }
+    }
+    return result;
+  }
+
+  private boolean[] getUpset() {
+    synchronized (state) {
+      return state.getUpset();
+    }
   }
 
   public Transaction getTransaction() {
@@ -595,7 +734,9 @@ public class Process {
    */
   private void recordDecision(StateType st) {
     // Log decision to DT log.
-    state.setType(st);
+    synchronized (state) {
+      state.setType(st);
+    }
   }
 
   /**
@@ -705,7 +846,25 @@ public class Process {
     }
   }
 
-  private synchronized boolean isParticipant() {
+  /**
+   * Return number of operational process as per current value of the upset.
+   * NOTE : Upset should be maintained correctly in case of total failure for
+   * this method to return correct value
+   * 
+   * @return
+   */
+  private int numOperational() {
+    int operational = 0;
+    boolean[] curUpset = getUpset();
+    for (int i = 1; i < curUpset.length; i++) {
+      if (curUpset[i]) {
+        operational++;
+      }
+    }
+    return operational;
+  }
+
+  private boolean isParticipant() {
     if (type == Message.NodeType.COORDINATOR
             || type == Message.NodeType.PARTICIPANT) {
       return true;
@@ -731,16 +890,16 @@ public class Process {
 
   // TODO Add a aliveSet for this. Upset is not same as alive set.
   private boolean isAlive(int procId) {
-    return state.getUpset()[procId];
+    return getUpset()[procId];
   }
-  
+
   // TODO Figure out if there is a better way to kill than stop.
   private void killThread(Thread t) {
     if (t != null) {
       t.stop();
     }
   }
-  
+
   private void kill() {
     killThread(coordinator);
     killThread(participant);
@@ -832,7 +991,7 @@ public class Process {
   /**
    * Different threads which might be spawned by a process during a transaction.
    * All threads except the heartBeat are stopped on reaching a decision.
-   * heartBeat thread of a previous transaction(if it exists) is stopped on 
+   * heartBeat thread of a previous transaction(if it exists) is stopped on
    * receipt of new initTransaction.
    */
   private Thread coordinator;

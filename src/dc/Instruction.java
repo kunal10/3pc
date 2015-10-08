@@ -3,6 +3,8 @@
  */
 package dc;
 
+import java.io.Serializable;
+
 import dc.Action.ActionType;
 import dc.Message.NotificationType;
 
@@ -11,7 +13,7 @@ import dc.Message.NotificationType;
  *         Instruction corresponding to a step which has to be executed by the
  *         controller based on the config.
  */
-public class Instruction {
+public class Instruction implements Serializable{
 
   public Instruction(InstructionType instructionType, String executionOrder,
           NotificationType notificationType, ActionType actionType, int n,

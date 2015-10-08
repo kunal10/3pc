@@ -81,11 +81,11 @@ public class Process {
       this.type = Message.NodeType.COORDINATOR;
       coordinator = new Coordinator();
       coordinator.start();
-    } else {
-      this.type = Message.NodeType.PARTICIPANT;
-      participant = new Participant();
-      participant.start();
     }
+    this.type = Message.NodeType.PARTICIPANT;
+    participant = new Participant();
+    participant.start();
+    
     if (heartBeat != null) {
       heartBeat.stop();
     }
@@ -419,7 +419,7 @@ public class Process {
     private boolean waitForMessage(ActionType expAction) {
       while (true) {
         if (expAction == ActionType.VOTE_REQ) {
-          if (Process.this.isAlive(cId)) {
+          if (!Process.this.isAlive(cId)) {
             config.logger.log(Level.INFO, "Detected death of Coordinator: "
                     + cId + " while waiting for VOTE_REQ");
             return false;
@@ -523,6 +523,7 @@ public class Process {
           }
           // TODO Write decision to DT Log.
           recordDecision(StateType.ABORTED);
+          config.logger.info("Received Abort for the transaction. Aborting.");
           return;
         }
 
@@ -664,6 +665,7 @@ public class Process {
     }
     switch (instr.getInstructionType()) {
       case CONTINUE:
+    	config.logger.log(Level.INFO, "Received Continue Instruction");
         break;
       case KILL:
         config.logger.log(Level.INFO, "Received Kill Instruction");

@@ -34,6 +34,12 @@ public class Action implements Serializable {
   public String getValue() {
     return value;
   }
+  
+  @Override
+	public String toString() {
+		// TODO Auto-generated method stub
+		return type.toString() + " " + value;
+	}
 
   /**
    * String describing the action to be performed. For eg:
@@ -41,6 +47,7 @@ public class Action implements Serializable {
    * Empty for actions which don't need any description.
    */
   private String value;
+
 
   private static final long serialVersionUID = 1L;
 }

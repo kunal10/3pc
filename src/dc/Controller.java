@@ -390,10 +390,11 @@ public class Controller {
                 + currentInstructionSeqNum);
       }
       boolean hasProcessDecided = false;
-      while (hasProcessDecided) {
+      while (!hasProcessDecided) {
         try {
           Message m = messageQueue[procNum].take();
           hasProcessDecided = checkIfProcessHasDecided(m);
+          sendContinueToProcess(m);
         } catch (InterruptedException e) {
           config.logger.log(Level.WARNING,
                   "Interrupted wait on decision message for proc " + procNum);
@@ -451,6 +452,8 @@ public class Controller {
         config.logger.info("Process " + procNum + " has decided "
                 + m.getAction().getType());
       }
+      config.logger.info("Process " + procNum + " has not decided "
+              + m.getAction().getType());
       return decisionTaken;
     }
 

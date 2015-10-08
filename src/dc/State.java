@@ -2,6 +2,7 @@ package dc;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class State implements Serializable{
   private static final long serialVersionUID = 1L;
@@ -86,6 +87,9 @@ public class State implements Serializable{
   private StateType type;
   private boolean[] upset;
   
+  public void setUpset(boolean[] upset) {
+    this.upset = Arrays.copyOf(upset, upset.length);
+  }
   public static void main(String[] args){
     boolean[] b = {true, false, false, true};
     State dc = new State(StateType.ABORTED, b);

@@ -112,6 +112,8 @@ public class Process {
      * Timer to use for scheduling tasks.
      */
     Timer timer;
+    // TimerTask to send heart beats
+    TimerTask tt;
 
     public HeartBeat() {
       exisitingTimers = new HashMap<>();
@@ -212,6 +214,13 @@ public class Process {
         }
       }
     }
+    
+    public void shutdownTimers(){
+      tt.cancel();
+      timer.cancel();
+      config.logger.info("Shut down timers");
+    }
+    
 
     public void run() {
       // Frequency at which heart beats are sent. Should not be too small other
@@ -223,7 +232,7 @@ public class Process {
       // On kill this timer should be killed using tt.cancel(); timer.cancel();
       // TODO: Register timer threads for killing later.
 
-      TimerTask tt = new SendHeartBeatTask();
+      tt = new SendHeartBeatTask();
       timer.schedule(tt, 0, freq);
 
       // Initialize all the timers to track heartbeat of other processes.
@@ -910,11 +919,13 @@ public class Process {
     }
   }
 
+  // TODO: *BUG* Kill yourself after killing other threads.
   private void kill() {
     killThread(coordinator);
-    killThread(participant);
+    //killThread(participant);
     killThread(newCoordinator);
     killThread(newParticipant);
+    heartBeat.shutdownTimers();
     killThread(heartBeat);
   }
 
@@ -1008,7 +1019,7 @@ public class Process {
   private Thread participant;
   private Thread newCoordinator;
   private Thread newParticipant;
-  private Thread heartBeat;
+  private HeartBeat heartBeat;
   /**
    * Config object used for setting up NetController.
    */

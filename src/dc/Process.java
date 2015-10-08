@@ -1,6 +1,5 @@
 package dc;
 
-import java.time.chrono.IsoChronology;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -314,6 +313,7 @@ public class Process {
 
     public void run() {
       Message msg = null;
+      int steps = -1;
       try {
         // Notify controller about starting of 3PC.
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
@@ -322,42 +322,50 @@ public class Process {
         msg = coordinatorControllerQueue.take();
         executeInstruction(msg);
 
-        // Send partial or complete VOTE_REQ.
-        int steps = msg.getInstr().getPartialSteps();
-        sendPartial(ActionType.VOTE_REQ, steps);
         // TODO : Write 3PC in DT log.
         // Notify controller about send of VOTE_REQ.
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                 ActionType.VOTE_REQ, Integer.toString(steps));
         // Wait for controller's response.
         msg = coordinatorControllerQueue.take();
+        // Send partial or complete VOTE_REQ.
+        steps = msg.getInstr().getPartialSteps();
+        sendPartial(ActionType.VOTE_REQ, steps);
         executeInstruction(msg);
 
         // Wait for votes from all processes.
-        boolean vote = waitForVotes();
+        boolean overalVote = waitForVotes();
         // Notify controller about receipt of VOTE_RES.
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
                 ActionType.VOTE_RES, msg.getAction().getValue());
         // Wait for controller's response.
         msg = coordinatorControllerQueue.take();
         executeInstruction(msg);
-        steps = msg.getInstr().getPartialSteps();
-
-        if (!vote) {
+        
+        // If some participant died before voting or voted No, abort.
+        if (!overalVote) {
           // TODO : Write Abort in DT Log.
           recordDecision(StateType.ABORTED);
+          // Notify controller that coordinator is going to send Abort.
+          notifyController(NodeType.COORDINATOR, NotificationType.SEND,
+                  ActionType.DECISION, "ABORTED");
+          // Wait for controller's response.
+          msg = coordinatorControllerQueue.take();
+          steps = msg.getInstr().getPartialSteps();
           // Send Abort to all participants who voted yes and are alive.
           sendDecision(StateType.ABORTED, steps);
+          executeInstruction(msg);
           return;
         }
-
-        // Send precommit to all participants who voted yes and are alive.
-        sendPartial(ActionType.PRE_COMMIT, steps);
-        // Notify controller about send of Precommit.
+        
+        // Everyone voted Yes.
+        // Notify controller that coordinator is going to send Precommit.
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
-                ActionType.PRE_COMMIT, msg.getAction().getValue());
+                ActionType.PRE_COMMIT, "");
         // Wait for controller's response.
         msg = coordinatorControllerQueue.take();
+        // Send precommit to all participants who voted yes and are alive.
+        sendPartial(ActionType.PRE_COMMIT, steps);
         executeInstruction(msg);
 
         // Wait for ack from all the participants.
@@ -371,7 +379,14 @@ public class Process {
 
         // Write Commit in DT Log.
         recordDecision(StateType.COMMITED);
+        // Notify controller that coordinator is going to send Commit.
+        notifyController(NodeType.COORDINATOR, NotificationType.SEND,
+                ActionType.DECISION, "COMMIT");
+        // Wait for controller's response.
+        msg = coordinatorControllerQueue.take();
+        steps = msg.getInstr().getPartialSteps();
         sendDecision(StateType.COMMITED, steps);
+        executeInstruction(msg);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
@@ -510,8 +525,13 @@ public class Process {
 
         boolean receivedPrecommit = waitForMessage(ActionType.PRE_COMMIT);
         // Notify the controller about receipt of Precommit/Abort.
-        notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
-                ActionType.PRE_COMMIT, "");
+        if (receivedPrecommit) {
+          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                  ActionType.PRE_COMMIT, "");
+        } else {
+          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                  ActionType.DECISION, "ABORT");
+        }
         // Wait for controller's response.
         msg = controllerQueue.take();
         executeInstruction(msg);
@@ -713,11 +733,20 @@ public class Process {
   private boolean isAlive(int procId) {
     return state.getUpset()[procId];
   }
-
-  /** 
-   */
-  public void kill() {
-
+  
+  // TODO Figure out if there is a better way to kill than stop.
+  private void killThread(Thread t) {
+    if (t != null) {
+      t.stop();
+    }
+  }
+  
+  private void kill() {
+    killThread(coordinator);
+    killThread(participant);
+    killThread(newCoordinator);
+    killThread(newParticipant);
+    killThread(heartBeat);
   }
 
   /**
@@ -754,13 +783,6 @@ public class Process {
    */
   private int numProcesses;
   private NetController nc;
-  /**
-   * This thread should be started only after startTime in case this process is
-   * started for 1st time so that it won't send heart beats to processes which
-   * are not yet up. Also it should start heartbeat only after reviveTime incase
-   * this process is being revived after failure.
-   */
-  private HeartBeat hb;
   /**
    * State of the process at any particular point of time. This can be modified
    * by different threads spawned by this process in the following scenarios:

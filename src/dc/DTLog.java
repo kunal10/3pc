@@ -8,11 +8,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.logging.Level;
-
 import dc.State.StateType;
 import ut.distcomp.framework.Config;
-
 import dc.State.StateType;
+import ut.distcomp.framework.Config;
 
 /**
  * Format of DT Log :
@@ -24,7 +23,6 @@ import dc.State.StateType;
  *
  */
 public class DTLog {
-
 
   public DTLog(Config config) {
     super();
@@ -118,7 +116,7 @@ public class DTLog {
           config.logger.info("End DT : "+ rs.toString());
         }
         else if(line.startsWith("Decision")){
-          rs.decision = line.split(":")[1]; 
+          rs.decision = line.split(":")[1];
           config.logger.info("Decision DT : "+ rs.toString());
         }
         else if(line.startsWith("State")){
@@ -161,7 +159,11 @@ public class DTLog {
   }
   
   /*
+<<<<<<< HEAD
    * Config for the given process.
+=======
+   * Config for the process owning this DT log.
+>>>>>>> DT log parse
    */
   private Config config;
 }

@@ -81,7 +81,6 @@ public class State implements Serializable{
   }
 */  
   
-
   public static boolean isTerminalStateType(StateType st) {
     return (st == StateType.COMMITED || st == StateType.ABORTED);
   }

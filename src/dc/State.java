@@ -19,7 +19,7 @@ public class State implements Serializable{
   
   public enum StateType { UNCERTAIN, COMMITABLE, COMMITED, ABORTED }; 
   public boolean isTerminalState() {
-    return (type == StateType.COMMITED || type == StateType.ABORTED);
+    return isTerminalStateType(type);
   } 
   public void setType(StateType st) {
     type = st;
@@ -36,4 +36,8 @@ public class State implements Serializable{
   
   private StateType type;
   private boolean[] upset;
+  
+  public static boolean isTerminalStateType(StateType st) {
+    return (st == StateType.COMMITED || st == StateType.ABORTED);
+  }
 }

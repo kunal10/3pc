@@ -48,6 +48,7 @@ public class DTLog {
   public void writeStartTransaction(){
     try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(fileName, true)))) {
       out.println("Start Transaction");
+      // TODO: Write upset.
     }catch (IOException e) {
         // Handle
     }

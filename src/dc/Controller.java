@@ -446,7 +446,8 @@ public class Controller {
     /**
      * Check if a process has sent a decision message.
      * Use this in deciding whether you have to finish this transaction.
-     * 
+     * TODO: Add logic for coordinator. Match on notification type as well.
+     * For coordinator its SEND. All others its RECEIVE. 
      * @param m
      * @return
      */

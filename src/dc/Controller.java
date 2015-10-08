@@ -106,7 +106,7 @@ public class Controller {
    * @param filename
    */
   private void readSimulationConfig(String filename) {
-    sc = new SimulationConfig("SimulationConfig1");
+    sc = new SimulationConfig(filename);
     sc.processInstructions();
   }
 

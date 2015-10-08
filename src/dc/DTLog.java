@@ -115,24 +115,25 @@ public class DTLog {
         }
         else if(line.startsWith("Decision")){
           rs.decision = line.split(":")[1]; 
+          config.logger.info("Decision DT : "+ rs.toString());
         }
         else if(line.startsWith("State")){
           try {
             rs.state = State.parseState(line.split(":")[1]);
+            config.logger.info("State DT : "+ rs.toString());
           } catch (Exception e) {
             config.logger.info("Couldn't parse state");
           }
         }
         else if(line.startsWith("Playlist")){
-          
+          rs.playlist = Playlist.parsePlaylist(line.split(":")[1]);
+          config.logger.info("Playlist DT : "+ rs.toString());
         }
         else{
           config.logger.log(Level.SEVERE, "Couldn't parse "+ line + " in DT Log");
-        }
-          
+        } 
         line = br.readLine();
       }
-      
     }
     return null;
     

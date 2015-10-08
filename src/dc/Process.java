@@ -81,11 +81,10 @@ public class Process {
       coordinator = new Coordinator();
       coordinator.start();
     }
-
     this.type = Message.NodeType.PARTICIPANT;
     participant = new Participant();
     participant.start();
-
+    
     if (heartBeat != null) {
       heartBeat.stop();
     }
@@ -597,6 +596,7 @@ public class Process {
           }
           // TODO Write decision to DT Log.
           recordDecision(StateType.ABORTED);
+          config.logger.info("Received Abort for the transaction. Aborting.");
           return;
         }
 
@@ -825,6 +825,7 @@ public class Process {
     }
     switch (instr.getInstructionType()) {
       case CONTINUE:
+    	config.logger.log(Level.INFO, "Received Continue Instruction");
         break;
       case KILL:
         config.logger.log(Level.INFO, "Received Kill Instruction");

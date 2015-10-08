@@ -166,7 +166,7 @@ public class Process {
     }
 
     private void addTimerToExistingTimer(int i) {
-      int delay = 3000;
+      int delay = 1200;
       TimerTask tti = new ProcessKillOnTimeoutTask(i);
       exisitingTimers.put(i, tti);
       timer.schedule(tti, delay);
@@ -189,7 +189,7 @@ public class Process {
           // TODO Auto-generated catch block
           e.printStackTrace();
         }
-        config.logger.info("Consumed Heartbeat of "+m.getSrc());
+        // config.logger.info("Consumed Heartbeat of "+m.getSrc());
         // Disable the timer if a timer is running for that process.
         if (exisitingTimers.containsKey(m.getSrc())) {
           exisitingTimers.get(m.getSrc()).cancel();

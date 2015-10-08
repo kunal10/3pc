@@ -431,9 +431,9 @@ public class Process {
         // Ignore the ones who have died since send of STATE_REQ.
         String stateReport = waitForParticipantMsg(ActionType.STATE_REQ);
         StateType reportedSt = StateType.valueOf(stateReport);
-        StateType coordSt = state.getType(); 
-        if (reportedSt != StateType.UNCERTAIN || 
-                coordSt != StateType.UNCERTAIN) {
+        StateType coordSt = state.getType();
+        if (dc.State.isTerminalStateType(reportedSt)
+                || dc.State.isTerminalStateType(coordSt)) {
           // If coordinator had not reached a decision before then it records it
           if (coordSt == StateType.UNCERTAIN) {
             // Write Decision in DT Log.
@@ -453,9 +453,9 @@ public class Process {
           executeInstruction(msg);
           return;
         }
-        
-        // All participants are uncertain.
-        // TODO Handle this case.
+
+        // All participants and the coordinator are uncertain.
+
       } catch (InterruptedException e) {
         e.printStackTrace();
       }

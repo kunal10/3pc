@@ -38,6 +38,16 @@ public class Song {
     return false;
   }
 
+  @Override
+  public String toString() {
+    return name+"^"+url;
+  }
+  
+  public static Song parseSong(String s){
+    String[] split = s.split("\\^");
+    return new Song(split[0], split[1]);
+  }
+  
   private String name;
   private String url;
 }

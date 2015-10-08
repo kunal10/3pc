@@ -2,6 +2,7 @@ package dc;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -62,6 +63,35 @@ public class Playlist {
       return songs.remove(s);
     }
     return false;
+  }
+  
+  @Override
+  public String toString() {
+    String s = "";
+    List<String> songsList = new LinkedList<>();
+    
+    for (Song song : songs) {
+      songsList.add(song.toString());
+    }
+    return String.join("#", songsList);
+    
+  }
+  
+  public static Playlist parsePlaylist(String s){
+    String[] split = s.split("#");
+    Playlist pl = new Playlist();
+    for (String song : split) {
+      pl.addSong(Song.parseSong(song));
+    }
+    return pl;
+  }
+  
+  public static void main(String[] args){
+    Playlist pl = new Playlist();
+    pl.addSong(new Song("A", "B"));
+    pl.addSong(new Song("C", "D"));
+    System.out.println(pl.toString());
+    System.out.println(Playlist.parsePlaylist(pl.toString()).toString());
   }
   
   /**

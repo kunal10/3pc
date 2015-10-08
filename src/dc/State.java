@@ -46,24 +46,8 @@ public class State implements Serializable{
     return stateType;
   }
   
-
-/*  public String toString() {
-    StringBuilder result = new StringBuilder();
-    result.append("\nStateType: " + type);
-    result.append("\nUpset: ");
-    for (int i = 0; i < upset.length; i++) {
-      result.append("\t" + i + ":" + upset[i]);
-    }
-    return result.toString();
-  }
-*/  
-  
-  public static boolean isTerminalStateType(StateType st) {
-    return (st == StateType.COMMITED || st == StateType.ABORTED);
-  }
-  
   public static State parseState(String s) throws Exception{
-    String[] split = s.split("#");
+    String[] split = s.split(":");
     State parsedState = null;
     if(split.length != 2){
       throw new Exception("Error in parsing state : "+s);
@@ -84,12 +68,31 @@ public class State implements Serializable{
     }
     return parsedState;
   }
+  
+
+/*  public String toString() {
+    StringBuilder result = new StringBuilder();
+    result.append("\nStateType: " + type);
+    result.append("\nUpset: ");
+    for (int i = 0; i < upset.length; i++) {
+      result.append("\t" + i + ":" + upset[i]);
+    }
+    return result.toString();
+  }
+*/  
+  
+
+  public static boolean isTerminalStateType(StateType st) {
+    return (st == StateType.COMMITED || st == StateType.ABORTED);
+  }
+  
   private StateType type;
   private boolean[] upset;
   
   public void setUpset(boolean[] upset) {
     this.upset = Arrays.copyOf(upset, upset.length);
   }
+  
   public static void main(String[] args){
     boolean[] b = {true, false, false, true};
     State dc = new State(StateType.ABORTED, b);

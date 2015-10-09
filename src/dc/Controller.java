@@ -398,6 +398,7 @@ public class Controller {
       while (!hasProcessDecided) {
         try {
           Message m = messageQueue[procNum].take();
+          config.logger.info("Checking if decision reached using :"+m.toString());
           hasProcessDecided = checkIfProcessHasDecided(m);
           sendContinueToProcess(m);
         } catch (InterruptedException e) {
@@ -414,6 +415,7 @@ public class Controller {
      */
     private void sendContinueToProcess(Message newMessage) {
       // Only the instruction type matters. All others are dummy values.
+      config.logger.info("Sending continue to message "+newMessage.toString()+ " Proc "+procNum);
       newMessage.setInstr(new Instruction(InstructionType.CONTINUE, "",
               NotificationType.DELIVER, ActionType.ACK, -1, procNum, -1));
       // Check
@@ -452,14 +454,20 @@ public class Controller {
      * @return
      */
     private boolean checkIfProcessHasDecided(Message m) {
-      // TODO Auto-generated method stub
-      boolean decisionTaken = m.getAction().getType() == ActionType.DECISION;
-      if (decisionTaken) {
-        config.logger.info("Process " + procNum + " has decided "
-                + m.getAction().getType());
+      boolean decisionTaken = false;
+      if(m.getSrcType() == NodeType.COORDINATOR){
+        decisionTaken = m.getAction().getType() == ActionType.DECISION && m.getNotificationType() == NotificationType.SEND;
       }
-      config.logger.info("Process " + procNum + " has not decided "
-              + m.getAction().getType());
+      else{
+        decisionTaken = m.getAction().getType() == ActionType.DECISION && m.getNotificationType() == NotificationType.RECEIVE;
+      }
+      
+      if (decisionTaken) {
+        config.logger.info("Process " + procNum + " has decided using"
+                + m.toString());
+      }
+      config.logger.info("Process " + procNum + " has not decided using"
+              + m.toString());
       return decisionTaken;
     }
 

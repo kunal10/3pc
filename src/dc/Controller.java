@@ -277,10 +277,15 @@ public class Controller {
      */
     private void sendHaltToProcess(Instruction i, Message m) {
       m.setSrcType(NodeType.CONTROLLER);
+      m.setDest(m.getSrc());
+      m.setDestType(m.getSrcType());
       m.setSrc(0);
+      m.setSrcType(NodeType.CONTROLLER);
       m.setInstr(i);
+      nc.sendMsg(m.getDest(), m);
       config.logger.info("Detected halt");
-      for (int i1 = 1; i1 < config.numProcesses; i1++) {
+      
+      /*for (int i1 = 1; i1 < config.numProcesses; i1++) {
         m.setDest(i1);
         m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
         nc.sendMsg(i1, m);
@@ -313,7 +318,7 @@ public class Controller {
           nc.sendMsg(i1, m);
           config.logger.info("RESUME Sent " + m.toString() + " to " + i1);
         }
-      }
+      }*/
     }
 
     /**

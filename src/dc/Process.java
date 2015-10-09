@@ -699,6 +699,7 @@ public class Process {
           // Send Ack to coordinator.
           sendToCoordinator(ActionType.ACK, "");
 
+
           boolean receivedCommit = waitForCoordinatorMsg(ActionType.DECISION,
                   msg);
           if (!receivedCommit) {
@@ -1241,7 +1242,12 @@ public class Process {
    * 
    */
   public void halt() {
-
+    try {
+      Thread.sleep(60000);
+    } catch (InterruptedException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
   }
 
   /** Will return 0 if called before startTime. */

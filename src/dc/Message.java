@@ -113,6 +113,9 @@ public class Message implements Serializable {
       result.append("\nAction: " + action.toString());
     if (state != null)
       result.append("\nState: " + state.toString());
+    if (notificationType != null) {
+      result.append("\nNotificationType: " + notificationType.name());
+    }
     // result.append("Time: " + time);
     return result.toString();
   }

@@ -143,6 +143,53 @@ public class Process {
         config.logger.info("Detected death of " + processToRemoveFromUpSet);
         exisitingTimers.remove(processToRemoveFromUpSet);
         state.removeProcessFromUpset(processToRemoveFromUpSet);
+        config.logger.log(Level.INFO, "Current cId " + cId);
+        if (processToRemoveFromUpSet == cId) {
+          config.logger.log(Level.INFO, "Detected death of Coord");
+          if (participant != null) {
+            try {
+              participant.join();
+              config.logger.log(Level.INFO, "Participant Thread: " + pId
+                      + "returned on death of new Coordinator");
+              participant = null;
+            } catch (InterruptedException e) {
+              // TODO Auto-generated catch block
+              e.printStackTrace();
+            }
+          }
+          if (newParticipant != null) {
+            try {
+              newParticipant.join();
+              config.logger.log(Level.INFO, "New Participant Thread: " + pId
+                      + "returned on death of new Coordinator");
+            } catch (InterruptedException e) {
+              // TODO Auto-generated catch block
+              e.printStackTrace();
+            }
+          }
+          boolean[] curUpset = getUpset();
+          int minAliveParticipant = pId;
+          for (int i = 1; i < numProcesses; i++) {
+            if (curUpset[i]) {
+              minAliveParticipant = i;
+              break;
+            }
+          }
+          synchronized (state) {
+            cId = minAliveParticipant;
+            if (cId == pId) {
+              config.logger.log(Level.INFO,
+                      "Spawning New Coordinator Thread for: " + pId);
+              newCoordinator = new NewCoordinator();
+              newCoordinator.start();
+            } else {
+              config.logger.log(Level.INFO,
+                      "Spawning New Participant Thread for: " + pId);
+              newParticipant = new NewParticipant();
+              newParticipant.start();
+            }
+          }
+        }
       }
     }
 
@@ -441,6 +488,7 @@ public class Process {
         boolean receivedPrecommit = waitForCoordinatorMsg(ActionType.PRE_COMMIT,
                 msg);
         if (!receivedPrecommit) {
+          config.logger.log(Level.INFO, "Returning on death of current coord");
           return;
         }
 
@@ -541,7 +589,7 @@ public class Process {
         if (dc.State.isTerminalStateType(decision)) {
           // Notify the controller about receipt of decision.
           notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
-                  ActionType.DECISION, "Commit");
+                  ActionType.DECISION, decision.name());
           // Wait for controller's response.
           msg = controllerQueue.take();
           executeInstruction(msg);
@@ -665,7 +713,15 @@ public class Process {
     String result = "";
     for (int key = 1; key < numProcesses; key++) {
       if (expAction == ActionType.STATE_RES) {
+        if (key == cId || !isOperational(key)) {
+          continue;
+        }
         result = StateType.UNCERTAIN.name();
+        if (!received.containsKey(key)) {
+          config.logger.log(Level.SEVERE,
+                  "Did not receive msg from operational process:" + key);
+          return "";
+        }
         StateType st = StateType.valueOf(received.get(key));
         if (State.isTerminalStateType(st)) {
           return st.name();
@@ -767,6 +823,9 @@ public class Process {
       // coordinator which should be consumed by a new participant thread.
       synchronized (commonQueue) {
         if (commonQueue.isEmpty()) {
+          if (!isAlive(cId)) {
+            return false;
+          }
           continue;
         }
         msg = commonQueue.peek();
@@ -1072,6 +1131,11 @@ public class Process {
   // TODO Add a aliveSet for this. Upset is not same as alive set.
   private boolean isAlive(int procId) {
     return getUpset()[procId];
+  }
+  
+  private boolean isOperational(int procId) {
+    boolean[] curUpset = state.getUpset();
+    return curUpset[procId];
   }
 
   // TODO Figure out if there is a better way to kill than stop.

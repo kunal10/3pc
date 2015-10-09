@@ -42,6 +42,8 @@ public class Process {
     coordinatorQueue = new LinkedBlockingQueue<>();
     coordinatorControllerQueue = new LinkedBlockingQueue<>();
 
+    received = new HashMap<Integer, String>();
+
     this.config = config;
 
     // Initialize Net Controller. Pass all the queues required.
@@ -80,11 +82,11 @@ public class Process {
       this.type = Message.NodeType.COORDINATOR;
       coordinator = new Coordinator();
       coordinator.start();
+    } else {
+      this.type = Message.NodeType.PARTICIPANT;
+      participant = new Participant();
+      participant.start();
     }
-    this.type = Message.NodeType.PARTICIPANT;
-    participant = new Participant();
-    participant.start();
-
     if (heartBeat != null) {
       heartBeat.stop();
     }
@@ -271,6 +273,7 @@ public class Process {
         msg = coordinatorControllerQueue.take();
         // Send partial or complete VOTE_REQ.
         steps = msg.getInstr().getPartialSteps();
+        config.logger.log(Level.INFO, "Coord sending vote req");
         sendPartialMsg(ActionType.VOTE_REQ, steps);
         executeInstruction(msg);
 
@@ -660,7 +663,7 @@ public class Process {
     // Iterate over the hash map and return value appropriate for specified
     // action.
     String result = "";
-    for (Integer key : received.keySet()) {
+    for (int key = 1; key < numProcesses; key++) {
       if (expAction == ActionType.STATE_RES) {
         result = StateType.UNCERTAIN.name();
         StateType st = StateType.valueOf(received.get(key));
@@ -672,6 +675,7 @@ public class Process {
         // Return No if someone did not vote or voted No.
         if (!received.containsKey(key)
                 || received.get(key).compareToIgnoreCase("No") == 0) {
+          config.logger.log(Level.INFO, "Inside xyz");
           return "No";
         }
       } else if (expAction == ActionType.ACK) {
@@ -751,11 +755,13 @@ public class Process {
    * 
    * @return
    */
-  private boolean waitForCoordinatorMsg(ActionType expAction, Message msg) {
+  private boolean waitForCoordinatorMsg(ActionType expAction,
+          Message response) {
     if (expAction == ActionType.VOTE_REQ) {
       return waitForVoteReq();
     }
     while (true) {
+      Message msg = null;
       ActionType recvAction = null;
       // We can't use take here since we could receive a STATE_REQ from a new
       // coordinator which should be consumed by a new participant thread.
@@ -777,6 +783,7 @@ public class Process {
                 && recvAction == ActionType.DECISION) {
           config.logger.log(Level.INFO, "Waiting for " + expAction.name()
                   + " Revceived: " + msg.toString());
+          response.setAction(new Action(recvAction, StateType.ABORTED.name()));
           return true;
         }
         config.logger.log(Level.SEVERE, "Waiting for " + expAction.name()
@@ -885,6 +892,7 @@ public class Process {
       }
       config.logger.log(Level.INFO,
               "Reached Decision : " + st.name() + " for current transaction.");
+      config.logger.log(Level.INFO, "Updated Playlist:" + playlist.toString());
       // Notify the controller about the decision.
       notifyController(type, NotificationType.RECEIVE, ActionType.DECISION,
               st.name());
@@ -1077,6 +1085,7 @@ public class Process {
     heartBeat.shutdownTimers();
     killThread(heartBeat);
     killThread(coordinator);
+    killThread(participant);
     killThread(newCoordinator);
     killThread(newParticipant);
   }

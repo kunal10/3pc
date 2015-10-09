@@ -243,10 +243,12 @@ public class Controller {
      */
     private void sendMessageToCoordinatorAndParticipant(Message m) {
       nc.sendMsg(procNum, m);
-      /*if (procNum == currentCoordinatorId) {
-        m.setDestType(NodeType.COORDINATOR);
-        nc.sendMsg(procNum, m);
-      }*/
+      /*
+       * if (procNum == currentCoordinatorId) {
+       * m.setDestType(NodeType.COORDINATOR);
+       * nc.sendMsg(procNum, m);
+       * }
+       */
     }
 
     /**
@@ -259,6 +261,8 @@ public class Controller {
      * @return
      */
     private boolean compareInstructionToMessage(Instruction i, Message m) {
+      config.logger.info("Inside CompareItoM Message:" + m.toString()
+              + "\nInstruction:" + i.toString());
       return (m.getAction().getType() == i.getActionType()
               && m.getNotificationType() == i.getNotificationType());
     }
@@ -352,7 +356,8 @@ public class Controller {
        * NodeType.PARTICIPANT, System.currentTimeMillis());
        * sendMessageToCoordinatorAndParticipant(startMessage);
        */
-      for (Instruction currentInstruction : indiviualInstructionQueue) {
+      while (!indiviualInstructionQueue.isEmpty()) {
+        Instruction currentInstruction = indiviualInstructionQueue.peek();
         currentInstructionSeqNum = indiviualInstructionQueue.peek().getSeqNo();
         try {
           Message newMessage = messageQueue[procNum].take();
@@ -375,7 +380,7 @@ public class Controller {
                     + currentInstruction.getSeqNo());
             // Send the instruction to process
             sendInstructionToProcess(currentInstruction, newMessage);
-
+            indiviualInstructionQueue.removeFirst();
           } else {
             // Send Continue
             sendContinueToProcess(newMessage);

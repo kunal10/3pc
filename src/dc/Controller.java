@@ -277,10 +277,15 @@ public class Controller {
      */
     private void sendHaltToProcess(Instruction i, Message m) {
       m.setSrcType(NodeType.CONTROLLER);
+      m.setDest(m.getSrc());
+      m.setDestType(m.getSrcType());
       m.setSrc(0);
+      m.setSrcType(NodeType.CONTROLLER);
       m.setInstr(i);
+      nc.sendMsg(m.getDest(), m);
       config.logger.info("Detected halt");
-      for (int i1 = 1; i1 < config.numProcesses; i1++) {
+      
+      /*for (int i1 = 1; i1 < config.numProcesses; i1++) {
         m.setDest(i1);
         m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
         nc.sendMsg(i1, m);
@@ -313,7 +318,7 @@ public class Controller {
           nc.sendMsg(i1, m);
           config.logger.info("RESUME Sent " + m.toString() + " to " + i1);
         }
-      }
+      }*/
     }
 
     /**
@@ -398,6 +403,7 @@ public class Controller {
       while (!hasProcessDecided) {
         try {
           Message m = messageQueue[procNum].take();
+          config.logger.info("Checking if decision reached using :"+m.toString());
           hasProcessDecided = checkIfProcessHasDecided(m);
           sendContinueToProcess(m);
         } catch (InterruptedException e) {
@@ -414,6 +420,7 @@ public class Controller {
      */
     private void sendContinueToProcess(Message newMessage) {
       // Only the instruction type matters. All others are dummy values.
+      config.logger.info("Sending continue to message "+newMessage.toString()+ " Proc "+procNum);
       newMessage.setInstr(new Instruction(InstructionType.CONTINUE, "",
               NotificationType.DELIVER, ActionType.ACK, -1, procNum, -1));
       // Check
@@ -446,19 +453,26 @@ public class Controller {
     /**
      * Check if a process has sent a decision message.
      * Use this in deciding whether you have to finish this transaction.
-     * 
+     * TODO: Add logic for coordinator. Match on notification type as well.
+     * For coordinator its SEND. All others its RECEIVE. 
      * @param m
      * @return
      */
     private boolean checkIfProcessHasDecided(Message m) {
-      // TODO Auto-generated method stub
-      boolean decisionTaken = m.getAction().getType() == ActionType.DECISION;
-      if (decisionTaken) {
-        config.logger.info("Process " + procNum + " has decided "
-                + m.getAction().getType());
+      boolean decisionTaken = false;
+      if(m.getSrcType() == NodeType.COORDINATOR){
+        decisionTaken = m.getAction().getType() == ActionType.DECISION && m.getNotificationType() == NotificationType.SEND;
       }
-      config.logger.info("Process " + procNum + " has not decided "
-              + m.getAction().getType());
+      else{
+        decisionTaken = m.getAction().getType() == ActionType.DECISION && m.getNotificationType() == NotificationType.RECEIVE;
+      }
+      
+      if (decisionTaken) {
+        config.logger.info("Process " + procNum + " has decided using"
+                + m.toString());
+      }
+      config.logger.info("Process " + procNum + " has not decided using"
+              + m.toString());
       return decisionTaken;
     }
 

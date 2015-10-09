@@ -37,8 +37,7 @@ public class Action implements Serializable {
   
   @Override
 	public String toString() {
-		// TODO Auto-generated method stub
-		return type.toString() + " " + value;
+		return "\n" + type.toString() + " " + value;
 	}
 
   /**

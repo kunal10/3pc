@@ -309,6 +309,81 @@ public class Process {
    * transaction.
    */
   class Coordinator extends Thread {
+
+    /**
+     * TODO : Check if participant are alive before sending them a message
+     * otherwise we will get exceptions in nc.sendMsg.
+     * 
+     * @param at
+     * @param steps
+     */
+    private void sendPartial(ActionType at, int steps) {
+      Message msg = null;
+      Action action = new Action(at, "");
+      if (steps == -1) {
+        for (int i = 1; i < numProcesses; i++) {
+          msg = new Message(pId, i, NodeType.COORDINATOR, NodeType.PARTICIPANT,
+                  action, getCurTime());
+          nc.sendMsg(i, msg);
+        }
+      } else {
+        for (int i = 1; i <= steps; i++) {
+          msg = new Message(pId, i, NodeType.COORDINATOR, NodeType.PARTICIPANT,
+                  action, getCurTime());
+          nc.sendMsg(i, msg);
+        }
+      }
+    }
+
+    /**
+     * @return Returns true if all processes voted yes, false if any of the
+     *         process died before voting or it voted no.
+     * @throws InterruptedException
+     */
+    private boolean waitForVotes() throws InterruptedException {
+      int receivedVotes = 0, numParticipants = numProcesses - 1;
+      while (receivedVotes < numParticipants) {
+        // TODO : **BUG** We should maintain a hashmap of votes and check if
+        // someone who has not voted has died. Currently even if process is
+        // dying after casting its vote we are returning false from here.
+        if (!allParticipantsAlive()) {
+          return false;
+        }
+        if (!coordinatorQueue.isEmpty()) {
+          // Consume vote and increment the counter.
+          Message msg = coordinatorQueue.remove();
+          // Return if a No vote is received.
+          if (msg.getAction().getValue().compareToIgnoreCase("No") == 0) {
+            config.logger.log(Level.INFO,
+                    "Received No vote from process: " + msg.getSrc());
+            return false;
+          }
+          config.logger.log(Level.INFO,
+                  "Received Yes vote from process: " + msg.getSrc());
+          receivedVotes++;
+        }
+      }
+      return true;
+    }
+
+    /**
+     * Waits till it receives Acks from all alive processes.
+     */
+    private void waitForAck() {
+      int receivedAcks = 0, numParticipants = numProcesses - 1;
+      while (receivedAcks < numParticipants) {
+        if (!coordinatorQueue.isEmpty()) {
+          // Consume ack and increment the counter.
+          Message msg = coordinatorQueue.remove();
+          config.logger.log(Level.INFO,
+                  "Received Ack from process: " + msg.getSrc());
+          receivedAcks++;
+        }
+        numParticipants = numAliveParticipiants();
+      }
+    }
+
+
     public void run() {
       Message msg = null;
       int steps = -1;
@@ -319,7 +394,6 @@ public class Process {
         // Wait for controller's response.
         msg = coordinatorControllerQueue.take();
         executeInstruction(msg);
-
         // Notify controller about send of VOTE_REQ.
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                 ActionType.VOTE_REQ, Integer.toString(steps));
@@ -333,6 +407,8 @@ public class Process {
 
         // Wait for votes from all processes.
         String overallVote = waitForParticipantMsg(ActionType.VOTE_RES);
+        boolean overalVote = waitForVotes();
+        config.logger.info("Votes calculated :" +overalVote);
         // Notify controller about receipt of VOTE_RES.
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
                 ActionType.VOTE_RES, msg.getAction().getValue());

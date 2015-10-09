@@ -243,10 +243,10 @@ public class Controller {
      */
     private void sendMessageToCoordinatorAndParticipant(Message m) {
       nc.sendMsg(procNum, m);
-      if (procNum == currentCoordinatorId) {
+      /*if (procNum == currentCoordinatorId) {
         m.setDestType(NodeType.COORDINATOR);
         nc.sendMsg(procNum, m);
-      }
+      }*/
     }
 
     /**

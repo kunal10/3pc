@@ -450,13 +450,13 @@ public class Process {
           notifyAndSendDecision(reportedSt);
         } else {
           // Some processes reported committable state.
-          
+
           // Update state to commitable.
           synchronized (state) {
             state.setType(StateType.COMMITABLE);
           }
           // TODO : Write Commitable state to DT Log.
-          
+
           // Notify controller about send of PRE_COMMIT.
           notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                   ActionType.PRE_COMMIT, "");
@@ -487,23 +487,6 @@ public class Process {
    * before receipt of VOTE_REQ).
    */
   class Participant extends Thread {
-    /**
-     * This inherently assumes that coordinator is fixed when this function is
-     * being executed. This is fine since when a current coordinator dies,
-     * heart beat thread should first stop the process's participant thread
-     * before modifying cId. Otherwise this method will send the message to the
-     * new Coordinator.
-     * 
-     * @param at
-     * @param value
-     */
-    private void sendToCoordinator(ActionType at, String value) {
-      Action action = new Action(at, value);
-      Message msg = new Message(pId, cId, NodeType.PARTICIPANT,
-              NodeType.COORDINATOR, action, getCurTime());
-      nc.sendMsg(cId, msg);
-    }
-
     /**
      * Wait for specified message from Coordinator. If it instead gets
      * a STATE_REQ here, then it waits for heart beat to detect death of
@@ -614,7 +597,7 @@ public class Process {
         boolean receivedPrecommit = waitForMessage(ActionType.PRE_COMMIT);
         // Notify the controller about receipt of Precommit/Abort.
         if (receivedPrecommit) {
-          synchronized(state) {
+          synchronized (state) {
             state.setType(StateType.COMMITABLE);
           }
           notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
@@ -637,14 +620,14 @@ public class Process {
           return;
         }
 
-        // Send Ack to coordinator.
-        sendToCoordinator(ActionType.ACK, "");
         // Notify the controller about sending of ACK.
         notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
                 ActionType.ACK, "");
         // Wait for controller's response.
         msg = controllerQueue.take();
         executeInstruction(msg);
+        // Send Ack to coordinator.
+        sendToCoordinator(ActionType.ACK, "");
 
         boolean receivedCommit = waitForMessage(ActionType.DECISION);
         if (!receivedCommit) {
@@ -672,6 +655,104 @@ public class Process {
     }
   }
 
+  class NewParticipant extends Thread {
+    public void run() {
+      Message msg = null;
+      try {
+        boolean recvStateReq = waitForCoordinatorMsg(ActionType.STATE_REQ);
+        if (!recvStateReq) {
+          // If received some unexpected action or STATE_REQ from higher
+          // coordinator.
+          this.stop();
+        }
+
+        // Notify the controller about receipt of STATE_REQ.
+        config.logger.log(Level.INFO, "Notifying receipt of STATE_REQ");
+        notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                ActionType.STATE_REQ, "");
+        // Wait for controller's response.
+        msg = controllerQueue.take();
+        executeInstruction(msg);
+
+        StateType st = null;
+        synchronized (state) {
+          st = state.getType();
+        }
+
+        // Notify the controller about send of STATE_RES.
+        config.logger.log(Level.INFO,
+                "Notifying controller that I am abt to send STATE_RES");
+        notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
+                ActionType.STATE_RES, "");
+        // Wait for controller's response.
+        msg = controllerQueue.take();
+        executeInstruction(msg);
+        sendToCoordinator(ActionType.STATE_RES, st.name());
+
+        StateType decision = null;
+        boolean recvResponse = waitForCoordinatorResponse(decision);
+        if (!recvResponse) {
+          // If received some unexpected action or STATE_REQ from higher
+          // coordinator.
+          this.stop();
+        }
+
+        if (dc.State.isTerminalStateType(decision)) {
+          // Notify the controller about receipt of decision.
+          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                  ActionType.DECISION, "Commit");
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
+          // TODO Write decision to DT Log.
+          recordDecision(decision);
+          return;
+        } else if (decision == StateType.COMMITABLE) {
+          synchronized (state) {
+            state.setType(StateType.COMMITABLE);
+          }
+          // Notify the controller about receipt of PRE_COMMIT.
+          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                  ActionType.PRE_COMMIT, "");
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
+
+          // Notify the controller about sending of ACK.
+          notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
+                  ActionType.ACK, "");
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
+          // Send Ack to coordinator.
+          sendToCoordinator(ActionType.ACK, "");
+          
+          boolean receivedCommit = waitForCoordinatorMsg(ActionType.DECISION);
+          if (!receivedCommit) {
+            // If received some unexpected action or STATE_REQ from higher
+            // coordinator.
+            this.stop();
+          }
+
+          // Notify the controller about receipt of COMMIT.
+          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                  ActionType.DECISION, "Commit");
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
+          // TODO Write Commit to DT Log.
+          recordDecision(StateType.COMMITED);
+        } else {
+          config.logger.log(Level.SEVERE,
+                  "waitForCoordinatorResponse did not set correct decision");
+          return;
+        }
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
   /**
    * Send partial/full message depending on number of specified steps.
    * Does not send message to itself and non operational processes.
@@ -689,7 +770,7 @@ public class Process {
     for (int i = 1; steps > 0 && i < curUpset.length; i++) {
       if (i == pId || !curUpset[i] || !received.containsKey(i)) {
         // Don't send the message to the following :
-        // 1. Itself 
+        // 1. Itself
         // 2. Non-operational processes
         // 3. Processes who are not uncertain.
       }
@@ -702,7 +783,8 @@ public class Process {
 
   /**
    * Waits till it receives messages from all participants except itself.
-   * NOTE : Resets the received map everytime it is called.
+   * NOTE : Resets the received map every time it is called.
+   * TODO : Make this more modular.
    */
   private String waitForParticipantMsg(ActionType expAction) {
     received = new HashMap<Integer, String>();
@@ -756,6 +838,192 @@ public class Process {
       }
     }
     return result;
+  }
+
+  /**
+   * This inherently assumes that coordinator is fixed when this function is
+   * being executed. This is fine since when a current coordinator dies,
+   * heart beat thread should wait for process's participant thread to terminate
+   * before modifying cId. Otherwise this method will send the message to the
+   * new Coordinator.
+   * 
+   * @param at
+   * @param value
+   */
+  private void sendToCoordinator(ActionType at, String value) {
+    Action action = new Action(at, value);
+    Message msg = new Message(pId, cId, NodeType.PARTICIPANT,
+            NodeType.COORDINATOR, action, getCurTime());
+    nc.sendMsg(cId, msg);
+  }
+
+  private boolean waitForVoteReq(ActionType expAction) {
+    while (true) {
+      Message msg = null;
+      ActionType recvAction = null;
+      if (expAction == ActionType.VOTE_REQ) {
+        if (!Process.this.isAlive(1)) {
+          config.logger.log(Level.INFO,
+                  "Detected death of 1st Coordinator while waiting for "
+                          + "VOTE_REQ");
+          return false;
+        }
+
+        // We can't use take here since we could receive a STATE_REQ from a new
+        // coordinator which should be consumed by a new participant thread.
+        synchronized (commonQueue) {
+          if (commonQueue.isEmpty()) {
+            continue;
+          }
+          msg = commonQueue.peek();
+        }
+        recvAction = msg.getAction().getType();
+
+        // Received STATE_REQ.
+        if (recvAction == ActionType.STATE_REQ) {
+          config.logger.log(Level.INFO, "Waiting for VOTE_REQ. Revceived: "
+                  + msg.toString() + "\n Current Coordinator must have died.");
+          // Heart beat should detect death of current coordinator and
+          // spawn a new participant thread which will consume this STATE_REQ
+          return false;
+        } else if (recvAction != expAction) {
+          // Received unexpected action.
+          config.logger.log(Level.SEVERE, "Waiting for " + expAction.name()
+                  + " Revceived: " + msg.toString());
+          return false;
+        } else {
+          // Received expected action.
+          msg = commonQueue.remove();
+          config.logger.log(Level.INFO,
+                  "Received " + expAction.name() + "from Coordinator");
+          return true;
+        }
+      }
+    }
+  }
+
+  /**
+   * Wait for specified message from Coordinator. If it instead gets
+   * a STATE_REQ from higher coordinator here, then it returns false.
+   * Heart beat should wait for Participant/NewParticipant threads to terminate
+   * before updating the cId and spawning NewPaticipant threads.
+   * 
+   * NOTE : It does not consume STATE_REQ message from higher coordinator.
+   * 
+   * @return
+   */
+  private boolean waitForCoordinatorMsg(ActionType expAction) {
+    if (expAction == ActionType.VOTE_REQ) {
+      return waitForVoteReq(expAction);
+    }
+    while (true) {
+      Message msg = null;
+      ActionType recvAction = null;
+      // We can't use take here since we could receive a STATE_REQ from a new
+      // coordinator which should be consumed by a new participant thread.
+      synchronized (commonQueue) {
+        if (commonQueue.isEmpty()) {
+          continue;
+        }
+        msg = commonQueue.peek();
+      }
+      recvAction = msg.getAction().getType();
+
+      // Received unexpected action.
+      if (recvAction != expAction) {
+        if (recvAction == ActionType.STATE_REQ) {
+          config.logger.log(Level.INFO, "Waiting for " + expAction.name()
+                  + " from : " + cId + " Revceived: " + msg.getSrc());
+          return false;
+        } else if (expAction == ActionType.PRE_COMMIT
+                && recvAction == ActionType.DECISION) {
+          config.logger.log(Level.INFO, "Waiting for " + expAction.name()
+                  + " Revceived: " + msg.toString());
+          return false;
+        }
+        config.logger.log(Level.SEVERE, "Waiting for " + expAction.name()
+                + " Revceived: " + msg.toString());
+        return false;
+      }
+      if (recvAction == ActionType.STATE_REQ && msg.getSrc() != cId) {
+        config.logger.log(Level.INFO, "Waiting for " + expAction.name()
+                + " from : " + cId + " Revceived: " + msg.getSrc());
+        return false;
+      }
+      if (recvAction == ActionType.DECISION) {
+        StateType decision = StateType.valueOf(msg.getAction().getValue());
+        if (decision != StateType.COMMITED) {
+          // This will always be COMMIT because we never wait for 
+          // Coordinator to send Abort Decision in the protocol.
+          config.logger.log(Level.INFO, "Waiting for " + expAction.name()
+                  + " from : " + cId + " Revceived: " + msg.getSrc());
+          return false;
+        }
+      }
+      // Received expected action.
+      msg = commonQueue.remove();
+      config.logger.log(Level.INFO,
+              "Received " + expAction.name() + "from Coordinator");
+      return true;
+    }
+  }
+
+  /**
+   * Wait for an Precommit/Commit/Abort message from Coordinator.
+   * If it instead gets a STATE_REQ from higher coordinator here,
+   * then it returns false. Heart beat should wait for
+   * Participant/NewParticipant threads to terminate before updating the cId and
+   * spawning NewPaticipant threads.
+   * 
+   * NOTE : It does not consume STATE_REQ message from higher coordinator.
+   * 
+   * @return
+   */
+  private boolean waitForCoordinatorResponse(StateType decision) {
+    while (true) {
+      Message msg = null;
+      ActionType recvAction = null;
+      // We can't use take here since we could receive a STATE_REQ from a new
+      // coordinator which should be consumed by a new participant thread.
+      synchronized (commonQueue) {
+        if (commonQueue.isEmpty()) {
+          continue;
+        }
+        msg = commonQueue.peek();
+      }
+      recvAction = msg.getAction().getType();
+
+      // Received unexpected action.
+      if (recvAction != ActionType.STATE_REQ
+              && recvAction != ActionType.PRE_COMMIT
+              && recvAction != ActionType.DECISION) {
+        config.logger.log(Level.SEVERE,
+                "Waiting for response from coord" + cId
+                        + " Received incorrect message from " + msg.getSrc()
+                        + msg.toString());
+        return false;
+      }
+
+      if (recvAction == ActionType.STATE_REQ) {
+        config.logger.log(Level.INFO,
+                "Received STATE_REQ from : " + msg.getSrc()
+                        + " while waiting for response from Coord: " + cId);
+        return false;
+      }
+      if (recvAction == ActionType.DECISION) {
+        // Received
+        decision = StateType.valueOf(msg.getAction().getValue());
+        config.logger.log(Level.INFO,
+                "Received decision " + decision.name() + " from : " + cId);
+      } else {
+        // Received PRE_COMMIT.
+        decision = StateType.COMMITABLE;
+        config.logger.log(Level.INFO,
+                "Received PreCommit from Coordinator:" + cId);
+      }
+      msg = commonQueue.remove();
+      return true;
+    }
   }
 
   private boolean[] getUpset() {

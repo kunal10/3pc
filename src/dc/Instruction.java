@@ -102,10 +102,12 @@ public class Instruction implements Serializable{
 
   @Override
   public String toString() {
-    // TODO Auto-generated method stub
-    return instructionType.toString() + " " + executionOrder + " "
-            + notificationType.toString() + " " + actionType.toString() + " "
-            + partialSteps;
+    StringBuilder result = new StringBuilder();
+    result.append("\nInstructionType: " + instructionType.name());
+    result.append("\tExecutionOrder: " + executionOrder);
+    result.append("\tActionType:" + actionType.name());
+    result.append("\tPartialSteps:" + partialSteps);
+    return result.toString();
   }
 
   public static void main(String[] args) {

@@ -34,6 +34,16 @@ public class State implements Serializable{
     upset[i] = false;
   }
   
+  public String toString() {
+    StringBuilder result = new StringBuilder();
+    result.append("\nStateType: " + type);
+    result.append("\nUpset: ");
+    for (int i = 0; i < upset.length; i++) {
+      result.append("\t" + i + ":" + upset[i]);
+    }
+    return result.toString();
+  }
+  
   private StateType type;
   private boolean[] upset;
   

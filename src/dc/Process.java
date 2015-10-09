@@ -334,12 +334,12 @@ public class Process {
         }
       }
     }
-
-    /**
+/*
+    *//**
      * @return Returns true if all processes voted yes, false if any of the
      *         process died before voting or it voted no.
      * @throws InterruptedException
-     */
+     *//*
     private boolean waitForVotes() throws InterruptedException {
       int receivedVotes = 0, numParticipants = numProcesses - 1;
       while (receivedVotes < numParticipants) {
@@ -364,7 +364,7 @@ public class Process {
         }
       }
       return true;
-    }
+    }*/
 
     /**
      * Waits till it receives Acks from all alive processes.
@@ -407,8 +407,6 @@ public class Process {
 
         // Wait for votes from all processes.
         String overallVote = waitForParticipantMsg(ActionType.VOTE_RES);
-        boolean overalVote = waitForVotes();
-        config.logger.info("Votes calculated :" +overalVote);
         // Notify controller about receipt of VOTE_RES.
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
                 ActionType.VOTE_RES, msg.getAction().getValue());

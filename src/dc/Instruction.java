@@ -14,6 +14,7 @@ import dc.Message.NotificationType;
  *         controller based on the config.
  */
 public class Instruction implements Serializable{
+  private static final long serialVersionUID = 1L;
 
   public Instruction(InstructionType instructionType, String executionOrder,
           NotificationType notificationType, ActionType actionType, int n,

@@ -207,16 +207,19 @@ public class Process {
           }
           synchronized (state) {
             cId = minAliveParticipant;
+            config.logger.info("Setting New Cid : "+cId);
             if (cId == pId) {
               config.logger.log(Level.INFO,
                       "Spawning New Coordinator Thread for: " + pId);
               newCoordinator = new NewCoordinator();
               newCoordinator.start();
+              type = NodeType.COORDINATOR;
             } else {
               config.logger.log(Level.INFO,
                       "Spawning New Participant Thread for: " + pId);
               newParticipant = new NewParticipant();
               newParticipant.start();
+              type = NodeType.PARTICIPANT;
             }
           }
         }
@@ -299,7 +302,10 @@ public class Process {
 
     public void shutdownTimers() {
       tt.cancel();
-      //timer.cancel();
+      for (Integer key : exisitingTimers.keySet()) {
+        exisitingTimers.get(key).cancel();
+      }
+      timer.cancel();
       config.logger.info("Shut down timers");
     }
 

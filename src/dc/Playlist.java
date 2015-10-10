@@ -16,6 +16,13 @@ public class Playlist {
   public Playlist() {
     this.songs = Collections.synchronizedList(new ArrayList<Song>());
   }
+  public Playlist(Playlist p) {
+    this.songs = Collections.synchronizedList(new ArrayList<Song>(p.getSongs()));
+  }
+  
+  public List<Song> getSongs() {
+    return songs;
+  }
   
   /**
    * Adds the passed song to the playlist. Does nothing if the song is already

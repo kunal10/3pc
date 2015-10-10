@@ -88,6 +88,14 @@ public class Instruction implements Serializable{
       int pId = Integer.parseInt(splits[0]);
       String[] instSplits = splits[1].split(" ");
       int len = instSplits.length;
+      if( len == 1 ){
+        Instruction ins = new Instruction(
+            InstructionType.valueOf(instSplits[0]),
+            "",
+            NotificationType.SEND,
+            ActionType.ACK, -1, pId, seqNo);
+        return ins;
+      }
       if (len == numOfInstPartsWithPartialSteps || len == numOfInstParts) {
         int n = (len == numOfInstPartsWithPartialSteps)
                 ? Integer.parseInt(instSplits[4]) : -1;

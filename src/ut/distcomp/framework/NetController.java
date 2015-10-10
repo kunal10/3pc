@@ -115,7 +115,7 @@ public class NetController {
 				initOutgoingConn(process);
 			outSockets[process].sendMsg(msg);
 			//config.logger.info("Sent "+msg.toString()+" to "+process);
-			if(msg.isHeartbeatMessage()){
+			if(!msg.isHeartbeatMessage()){
 				config.logger.info("Sent "+msg.toString()+" to "+process);
 			}
 		} catch (IOException e) { 

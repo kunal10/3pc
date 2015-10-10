@@ -101,8 +101,21 @@ public class DTLog {
     }
   }
   
+  /**
+   * Record Vote in DT Log
+   * @param vote
+   */
+  public void writeVote(boolean vote){
+    try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
+      // TODO: Check if there is a decision already for that transaction
+      out.println("Vote :"+ ((vote) ? "Yes": "No"));
+    }catch (IOException e) {
+        // Handle
+    }
+  }
+  
   public RecoveredState parseDTLog() throws FileNotFoundException, IOException {
-    RecoveredState rs = new RecoveredState();
+    RecoveredState rs = new RecoveredState(config.numProcesses - 1);
     try(BufferedReader br = new BufferedReader(new FileReader(config.DTFilename))) {
       String line = br.readLine();
       while(line != null){
@@ -114,26 +127,27 @@ public class DTLog {
           rs.state.setUpset(b);
           rs.state.setType(StateType.UNCERTAIN);
           rs.decision = "";
+          rs.writtenPlaylistInTransaction = false;
           config.logger.info("Start DT : "+ rs.toString());
-        }
-        else if(line.startsWith("End")){
+        }else if(line.startsWith("End")){
           config.logger.info("End DT : "+ rs.toString());
-        }
-        else if(line.startsWith("Decision")){
+        }else if(line.startsWith("Decision")){
           rs.decision = line.split(":")[1]; 
           config.logger.info("Decision DT : "+ rs.toString());
-        }
-        else if(line.startsWith("State")){
+        }else if(line.startsWith("State")){
           try {
             rs.state = new State(State.parseState(line.split(":")[1]));
             config.logger.info("State DT : "+ rs.toString());
           } catch (Exception e) {
             config.logger.info("Couldn't parse state");
           }
-        }
-        else if(line.startsWith("Playlist")){
+        }else if(line.startsWith("Playlist")){
           rs.playlist = Playlist.parsePlaylist(line.split(":")[1]);
+          rs.writtenPlaylistInTransaction = true;
           config.logger.info("Playlist DT : "+ rs.toString());
+        }else if(line.startsWith("Vote")){
+          rs.vote = line.split(":")[1];
+          config.logger.info("Vote DT : "+ rs.toString());
         }
         else{
           config.logger.log(Level.SEVERE, "Couldn't parse "+ line + " in DT Log");
@@ -144,30 +158,8 @@ public class DTLog {
     return null;
     
   }
-  
-  
-  class RecoveredState{
-    public State state;
-    public Playlist playlist;
-    public String decision;
-    public RecoveredState() {
-      state = new State(StateType.UNCERTAIN, new boolean[config.numProcesses - 1]);
-      playlist = new Playlist();
-      decision = "";
-    }
-    @Override
-    public String toString() {
-      // TODO Auto-generated method stub
-      return "DT Log State : "+state.toString()+"..."+playlist.toString()+"..."+decision;
-    }
-  }
-  
-  /*
-<<<<<<< HEAD
-   * Config for the given process.
-=======
+  /**
    * Config for the process owning this DT log.
->>>>>>> DT log parse
    */
   private Config config;
 }

@@ -11,3 +11,4 @@ port2=5002
 port3=5003
 port4=5004
 logfile=LogP1.txt
+DTFilename=DT1.txt

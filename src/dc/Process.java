@@ -85,11 +85,11 @@ public class Process {
       this.type = Message.NodeType.COORDINATOR;
       coordinator = new Coordinator();
       coordinator.start();
-    }
+    } else{
     this.type = Message.NodeType.PARTICIPANT;
     participant = new Participant();
     participant.start();
-    
+    }
     if (heartBeat != null) {
       heartBeat.stop();
     }
@@ -310,84 +310,11 @@ public class Process {
    */
   class Coordinator extends Thread {
 
-    /**
-     * TODO : Check if participant are alive before sending them a message
-     * otherwise we will get exceptions in nc.sendMsg.
-     * 
-     * @param at
-     * @param steps
-     */
-    private void sendPartial(ActionType at, int steps) {
-      Message msg = null;
-      Action action = new Action(at, "");
-      if (steps == -1) {
-        for (int i = 1; i < numProcesses; i++) {
-          msg = new Message(pId, i, NodeType.COORDINATOR, NodeType.PARTICIPANT,
-                  action, getCurTime());
-          nc.sendMsg(i, msg);
-        }
-      } else {
-        for (int i = 1; i <= steps; i++) {
-          msg = new Message(pId, i, NodeType.COORDINATOR, NodeType.PARTICIPANT,
-                  action, getCurTime());
-          nc.sendMsg(i, msg);
-        }
-      }
-    }
-/*
-    *//**
-     * @return Returns true if all processes voted yes, false if any of the
-     *         process died before voting or it voted no.
-     * @throws InterruptedException
-     *//*
-    private boolean waitForVotes() throws InterruptedException {
-      int receivedVotes = 0, numParticipants = numProcesses - 1;
-      while (receivedVotes < numParticipants) {
-        // TODO : **BUG** We should maintain a hashmap of votes and check if
-        // someone who has not voted has died. Currently even if process is
-        // dying after casting its vote we are returning false from here.
-        if (!allParticipantsAlive()) {
-          return false;
-        }
-        if (!coordinatorQueue.isEmpty()) {
-          // Consume vote and increment the counter.
-          Message msg = coordinatorQueue.remove();
-          // Return if a No vote is received.
-          if (msg.getAction().getValue().compareToIgnoreCase("No") == 0) {
-            config.logger.log(Level.INFO,
-                    "Received No vote from process: " + msg.getSrc());
-            return false;
-          }
-          config.logger.log(Level.INFO,
-                  "Received Yes vote from process: " + msg.getSrc());
-          receivedVotes++;
-        }
-      }
-      return true;
-    }*/
-
-    /**
-     * Waits till it receives Acks from all alive processes.
-     */
-    private void waitForAck() {
-      int receivedAcks = 0, numParticipants = numProcesses - 1;
-      while (receivedAcks < numParticipants) {
-        if (!coordinatorQueue.isEmpty()) {
-          // Consume ack and increment the counter.
-          Message msg = coordinatorQueue.remove();
-          config.logger.log(Level.INFO,
-                  "Received Ack from process: " + msg.getSrc());
-          receivedAcks++;
-        }
-        numParticipants = numAliveParticipiants();
-      }
-    }
-
-
     public void run() {
       Message msg = null;
       int steps = -1;
       try {
+        dtLog.writeStartTransaction();
         // Notify controller about starting of 3PC.
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
                 ActionType.START, "");
@@ -416,19 +343,21 @@ public class Process {
 
         // If some participant died before voting or voted No, abort.
         if (overallVote.compareToIgnoreCase("No") == 0 || !vote) {
-          // TODO : Write Abort in DT Log.
+          // Write Abort in DT Log.
+          recordDecision(StateType.ABORTED);
           // Notify controller and send the decision.
           notifyAndSendDecision(StateType.ABORTED);
           return;
         }
 
         // Everyone voted Yes.
+        dtLog.writeVote(vote);
         // Update state to commitable.
         synchronized (state) {
           state.setType(StateType.COMMITABLE);
         }
-        // TODO : Write Commitable state to DT Log.
-
+        // Write Commitable state to DT Log.
+        dtLog.writeState(state);
         // Notify controller about send of PRE_COMMIT.
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                 ActionType.PRE_COMMIT, "");
@@ -440,13 +369,14 @@ public class Process {
 
         // Wait for Acks from all operational processes.
         waitForParticipantMsg(ActionType.ACK);
-        // TODO : Write Decision in DT Log.
+        // Write Decision in DT Log.
         recordDecision(StateType.COMMITED);
         // Notify controller and send the decision.
         notifyAndSendDecision(StateType.COMMITED);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
+      dtLog.writeEndTransaction();
     }
   }
 
@@ -485,7 +415,7 @@ public class Process {
                 && coordSt == StateType.UNCERTAIN) {
           // All participants and the coordinator are uncertain so abort.
           reportedSt = StateType.ABORTED;
-          // TODO : Write Decision in DT Log.
+          // Write Decision in DT Log.
           recordDecision(reportedSt);
           // Notify controller and send the decision.
           notifyAndSendDecision(reportedSt);
@@ -496,8 +426,8 @@ public class Process {
           synchronized (state) {
             state.setType(StateType.COMMITABLE);
           }
-          // TODO : Write Commitable state to DT Log.
-
+          // Write Commitable state to DT Log.
+          dtLog.writeState(state);
           // Notify controller about send of PRE_COMMIT.
           notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                   ActionType.PRE_COMMIT, "");
@@ -509,7 +439,7 @@ public class Process {
 
           // Wait for Acks from all operational processes.
           waitForParticipantMsg(ActionType.ACK);
-          // TODO : Write Decision in DT Log.
+          // Write Decision in DT Log.
           recordDecision(StateType.COMMITED);
           // Notify controller and send the decision.
           notifyAndSendDecision(reportedSt);
@@ -517,6 +447,7 @@ public class Process {
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
+      dtLog.writeEndTransaction();
       return;
     }
   }
@@ -611,6 +542,7 @@ public class Process {
     public void run() {
       Message msg = null;
       try {
+        dtLog.writeStartTransaction();
         // Notify controller about starting of 3PC.
         notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                 ActionType.START, "");
@@ -621,7 +553,7 @@ public class Process {
         boolean receivedVoteReq = waitForCoordinatorMsg(ActionType.VOTE_REQ,
                 msg);
         if (!receivedVoteReq) {
-          // TODO Write abort in DT Log.
+          // Write abort in DT Log.
           recordDecision(StateType.ABORTED);
           return;
         }
@@ -643,13 +575,14 @@ public class Process {
           // Wait for controller's response.
           msg = controllerQueue.take();
           executeInstruction(msg);
-          // TODO Write decision to DT Log.
+          // Write decision to DT Log.
           recordDecision(StateType.ABORTED);
           return;
         }
 
         // If participant's vote is Yes.
-        // TODO Write Yes vote to DT Log.
+        // Write Yes vote to DT Log.
+        dtLog.writeVote(vote);
         // Notify the controller about the send of VOTE_RES.
         notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
                 ActionType.VOTE_RES, "Yes");
@@ -671,7 +604,7 @@ public class Process {
           // Wait for controller's response.
           msg = controllerQueue.take();
           executeInstruction(msg);
-          // TODO Write decision to DT Log.
+          // Write decision to DT Log.
           recordDecision(StateType.ABORTED);
           config.logger.info("Received Abort for the transaction. Aborting.");
           return;
@@ -681,6 +614,7 @@ public class Process {
         synchronized (state) {
           state.setType(StateType.COMMITABLE);
         }
+        dtLog.writeState(state);
         notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                 ActionType.PRE_COMMIT, "");
         // Wait for controller's response.
@@ -710,11 +644,12 @@ public class Process {
         // Wait for controller's response.
         msg = controllerQueue.take();
         executeInstruction(msg);
-        // TODO Write Commit to DT Log.
+        // Write Commit to DT Log.
         recordDecision(StateType.COMMITED);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
+      dtLog.writeEndTransaction();
     }
   }
 
@@ -741,7 +676,7 @@ public class Process {
         synchronized (state) {
           st = state.getType();
         }
-
+        dtLog.writeState(state);
         // Notify the controller about send of STATE_RES.
         config.logger.log(Level.INFO,
                 "Notifying controller that I am abt to send STATE_RES");
@@ -768,13 +703,14 @@ public class Process {
           // Wait for controller's response.
           msg = controllerQueue.take();
           executeInstruction(msg);
-          // TODO Write decision to DT Log.
+          // Write decision to DT Log.
           recordDecision(decision);
           return;
         } else if (decision == StateType.COMMITABLE) {
           synchronized (state) {
             state.setType(StateType.COMMITABLE);
           }
+          dtLog.writeState(state);
           // Notify the controller about receipt of PRE_COMMIT.
           notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                   ActionType.PRE_COMMIT, "");
@@ -806,7 +742,7 @@ public class Process {
           // Wait for controller's response.
           msg = controllerQueue.take();
           executeInstruction(msg);
-          // TODO Write Commit to DT Log.
+          // Write Commit to DT Log.
           recordDecision(StateType.COMMITED);
         } else {
           config.logger.log(Level.SEVERE,
@@ -816,6 +752,7 @@ public class Process {
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
+      dtLog.writeEndTransaction();
     }
   }
 
@@ -1070,9 +1007,13 @@ public class Process {
   private void recordDecision(StateType st) {
     synchronized (state) {
       state.setType(st);
-      if (st == StateType.COMMITED) {
+      if (st == StateType.COMMITED && !recoveredState.writtenPlaylistInTransaction) {
         updatePlaylist();
+        recoveredState.writtenPlaylistInTransaction = true;
       }
+      dtLog.writeDecision(st.toString());
+      dtLog.writeState(state);
+      dtLog.writePlaylist(playlist);
       config.logger.log(Level.INFO,
               "Reached Decision : " + st.name() + " for current transaction.");
       config.logger.log(Level.INFO, "Updated Playlist:" + playlist.toString());
@@ -1414,4 +1355,9 @@ public class Process {
    * DT Log handle for this process.
    */
   private DTLog dtLog;
+  
+  /**
+   * Storing the recovered state from DTLog. 
+   */
+  private RecoveredState recoveredState;
 }

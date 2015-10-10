@@ -364,6 +364,21 @@ public class Controller {
       while (!indiviualInstructionQueue.isEmpty()) {
         Instruction currentInstruction = indiviualInstructionQueue.peek();
         currentInstructionSeqNum = indiviualInstructionQueue.peek().getSeqNo();
+        if (checkIfCurrentInstructionRevive(currentInstruction)) {
+          // TODO: Call the revive method on the process
+          config.logger.info("Detected revive instruction "+procNum);
+          try {
+            Thread.sleep(10000);
+          } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+          }
+          processes[procNum] = new Process(procNum, getCurrentTime(), processesConfigs[procNum]);
+          processes[procNum].reviveProcessState(currentTransaction, vote);
+          incrementNextInstructionSequenceNum();
+          indiviualInstructionQueue.removeFirst();
+          continue;
+        }
         try {
           Message newMessage = messageQueue[procNum].take();
           config.logger.info(
@@ -373,13 +388,6 @@ public class Controller {
           // new coordinator then change your Cid.
           checkInstructionAndUpdateCoordinatorId(newMessage);
 
-          if (checkIfCurrentInstructionRevive(currentInstruction)) {
-            // TODO: Call the revive method on the process
-            config.logger.info("Detected revive instruction");
-            processes[procNum] = new Process(procNum, getCurrentTime(), config);
-            processes[procNum].reviveProcessState(currentTransaction, vote);
-            incrementNextInstructionSequenceNum();
-          } else
             if (compareInstructionToMessage(currentInstruction, newMessage)) {
             while (currentInstruction.getSeqNo() != minSeqNumber) {
             }
@@ -400,6 +408,11 @@ public class Controller {
         config.logger.info("Cuurent inst being executed by conroller for "
                 + procNum + ": " + currentInstruction.toString() + " Seq No:"
                 + currentInstructionSeqNum);
+        config.logger.info("Remaining instructions for :"+procNum);
+        for (Instruction b : indiviualInstructionQueue) {
+          config.logger.info(b.toString());
+          config.logger.info("=========================\n");
+        }
       }
       boolean isTransactionComplete = false;
       while (!isTransactionComplete) {

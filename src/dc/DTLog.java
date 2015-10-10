@@ -41,12 +41,14 @@ public class DTLog {
   /**
    * Write a start transaction line.
    */
-  public void writeStartTransaction(){
-    try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
-      out.println("Start Transaction");
-      // TODO: Write upset.
-    }catch (IOException e) {
-        // Handle
+  public void writeStartTransaction(boolean isTransactionComplete){
+    if(!isTransactionComplete){
+      try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
+        out.println("Start Transaction");
+        // TODO: Write upset.
+      }catch (IOException e) {
+          // Handle
+      }
     }
   }
   
@@ -65,12 +67,14 @@ public class DTLog {
    * Write the decision taken by a process for a transaction.
    * @param decision
    */
-  public void writeDecision(String decision){
-    try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
-      // TODO: Check if there is a decision already for that transaction
-      out.println("Decision :"+decision);
-    }catch (IOException e) {
-        // Handle
+  public void writeDecision(String decision, boolean isTransactionComplete){
+    if(!isTransactionComplete){
+      try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
+        // TODO: Check if there is a decision already for that transaction
+        out.println("Decision :"+decision);
+      }catch (IOException e) {
+          // Handle
+      }
     }
   }
   
@@ -78,12 +82,14 @@ public class DTLog {
    * Write the state of the process. Should be written everytime the state changes.
    * @param s
    */
-  public void writeState(State s){
-    try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
-      // TODO: Check if there is a decision already for that transaction
-      out.println("State :"+s.toString());
-    }catch (IOException e) {
-        // Handle
+  public void writeState(State s, boolean isTransactionComplete){
+    if(!isTransactionComplete){
+      try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
+        // TODO: Check if there is a decision already for that transaction
+        out.println("State :"+s.toString());
+      }catch (IOException e) {
+          // Handle
+      }
     }
   }
   
@@ -92,12 +98,14 @@ public class DTLog {
    * @param pl
    */
 
-  public void writePlaylist(Playlist pl){
-    try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
-      // TODO: Check if there is a decision already for that transaction
-      out.println("Playlist :"+pl.toString());
-    }catch (IOException e) {
-        // Handle
+  public void writePlaylist(Playlist pl, boolean isTransactionComplete){
+    if(!isTransactionComplete){
+      try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
+        // TODO: Check if there is a decision already for that transaction
+        out.println("Playlist :"+pl.toString());
+      }catch (IOException e) {
+          // Handle
+      }
     }
   }
   
@@ -105,22 +113,24 @@ public class DTLog {
    * Record Vote in DT Log
    * @param vote
    */
-  public void writeVote(boolean vote){
-    try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
-      // TODO: Check if there is a decision already for that transaction
-      out.println("Vote :"+ ((vote) ? "Yes": "No"));
-    }catch (IOException e) {
-        // Handle
+  public void writeVote(boolean vote, boolean isTransactionComplete){
+    if(!isTransactionComplete){
+      try(PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(config.DTFilename, true)))) {
+        // TODO: Check if there is a decision already for that transaction
+        out.println("Vote :"+ ((vote) ? "Yes": "No"));
+      }catch (IOException e) {
+          // Handle
+      }
     }
   }
   
   public RecoveredState parseDTLog() throws FileNotFoundException, IOException {
-    RecoveredState rs = new RecoveredState(config.numProcesses - 1);
+    RecoveredState rs = new RecoveredState(config.numProcesses);
     try(BufferedReader br = new BufferedReader(new FileReader(config.DTFilename))) {
       String line = br.readLine();
       while(line != null){
         if(line.startsWith("Start")){
-          boolean[] b = new boolean[config.numProcesses - 1];
+          boolean[] b = new boolean[config.numProcesses];
           for (int i = 0; i < b.length; i++) {
             b[i] = true;
           }
@@ -155,7 +165,7 @@ public class DTLog {
         line = br.readLine();
       }
     }
-    return null;
+    return rs;
     
   }
   /**

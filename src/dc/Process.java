@@ -73,9 +73,11 @@ public class Process {
   public void initTransaction(Transaction t, boolean vote) {
     this.transaction = t;
     this.vote = vote;
+    // Initialize the recovered state.
+    recoveredState = new RecoveredState(config.numProcesses);
     // The value at index 0 will be irrelevant since 0 corresponds to the
     // controller process.
-    boolean[] upset = new boolean[this.numProcesses];
+    boolean[] upset = new boolean[config.numProcesses];
     for (int i = 0; i < upset.length; i++) {
       upset[i] = true;
     }
@@ -100,8 +102,10 @@ public class Process {
   }
   
   public void reviveProcessState(Transaction t, boolean vote){
+    config.logger.info("Reviveing process "+pId);
     this.transaction = t;
     this.vote = vote;
+    this.type = Message.NodeType.NON_PARTICIPANT;
     try {
       recoveredState = dtLog.parseDTLog();
       state = new State(recoveredState.state);
@@ -220,25 +224,30 @@ public class Process {
     }
 
     public void sendHeartBeat() {
-      synchronized (type) {
-        Message.NodeType srcType = Message.NodeType.NON_PARTICIPANT;
-        if (isParticipant()) {
-          srcType = Message.NodeType.PARTICIPANT;
-        }
-        long curTime = getCurTime();
-        // Loop starts from 1 since we don't need to send the heart beat to
-        // the controller.
-        for (int dest = 1; dest < numProcesses; dest++) {
-          Message m = null;
-          if (state.getUpset()[dest]) {
-            m = new Message(pId, dest, srcType, Message.NodeType.PARTICIPANT,
-                    state, curTime);
-          } else {
-            m = new Message(pId, dest, srcType,
-                    Message.NodeType.NON_PARTICIPANT, state, curTime);
+      try {
+        synchronized (type) {
+          Message.NodeType srcType = Message.NodeType.NON_PARTICIPANT;
+          if (isParticipant()) {
+            srcType = Message.NodeType.PARTICIPANT;
           }
-          nc.sendMsg(dest, m);
+          long curTime = getCurTime();
+          // Loop starts from 1 since we don't need to send the heart beat to
+          // the controller.
+          for (int dest = 1; dest < numProcesses; dest++) {
+            Message m = null;
+            if (state.getUpset()[dest]) {
+              m = new Message(pId, dest, srcType, Message.NodeType.PARTICIPANT,
+                      state, curTime);
+            } else {
+              m = new Message(pId, dest, srcType,
+                      Message.NodeType.NON_PARTICIPANT, state, curTime);
+            }
+            nc.sendMsg(dest, m);
+          }
         }
+      } catch (Exception e) {
+        config.logger.info("Exception in Sending heartbeat from "+pId + " "+e.getMessage());
+        e.printStackTrace();
       }
     }
 
@@ -266,12 +275,13 @@ public class Process {
           // TODO Auto-generated catch block
           e.printStackTrace();
         }
-        // config.logger.info("Consumed Heartbeat of "+m.getSrc());
+        config.logger.info("Consumed Heartbeat of "+m.getSrc());
         // Disable the timer if a timer is running for that process.
         if (exisitingTimers.containsKey(m.getSrc())) {
           exisitingTimers.get(m.getSrc()).cancel();
         }
         // Add a new timer for the process which has sent a heartbeat
+        config.logger.info(pId + " Adding timer for "+m.getSrc());
         addTimerToExistingTimer(m.getSrc());
 
         // If non participant receives a decision from some other process
@@ -289,7 +299,7 @@ public class Process {
 
     public void shutdownTimers() {
       tt.cancel();
-      timer.cancel();
+      //timer.cancel();
       config.logger.info("Shut down timers");
     }
 
@@ -319,6 +329,11 @@ public class Process {
         if (!state.isTerminalState()) {
           processHeartBeat();
         }
+        else{
+          for (Integer key : exisitingTimers.keySet()) {
+            exisitingTimers.get(key).cancel();
+          }
+        }
       }
     }
   }
@@ -333,7 +348,7 @@ public class Process {
       Message msg = null;
       int steps = -1;
       try {
-        dtLog.writeStartTransaction();
+        dtLog.writeStartTransaction(recoveredState.writtenPlaylistInTransaction);
         // Notify controller about starting of 3PC.
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
                 ActionType.START, "");
@@ -370,13 +385,13 @@ public class Process {
         }
 
         // Everyone voted Yes.
-        dtLog.writeVote(vote);
+        dtLog.writeVote(vote, recoveredState.writtenPlaylistInTransaction);
         // Update state to commitable.
         synchronized (state) {
           state.setType(StateType.COMMITABLE);
         }
         // Write Commitable state to DT Log.
-        dtLog.writeState(state);
+        dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
         // Notify controller about send of PRE_COMMIT.
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                 ActionType.PRE_COMMIT, "");
@@ -395,7 +410,6 @@ public class Process {
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
-      dtLog.writeEndTransaction();
     }
   }
 
@@ -446,7 +460,7 @@ public class Process {
             state.setType(StateType.COMMITABLE);
           }
           // Write Commitable state to DT Log.
-          dtLog.writeState(state);
+          dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
           // Notify controller about send of PRE_COMMIT.
           notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                   ActionType.PRE_COMMIT, "");
@@ -466,7 +480,6 @@ public class Process {
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
-      dtLog.writeEndTransaction();
       return;
     }
   }
@@ -561,7 +574,7 @@ public class Process {
     public void run() {
       Message msg = null;
       try {
-        dtLog.writeStartTransaction();
+        dtLog.writeStartTransaction(recoveredState.writtenPlaylistInTransaction);
         // Notify controller about starting of 3PC.
         notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                 ActionType.START, "");
@@ -601,7 +614,7 @@ public class Process {
 
         // If participant's vote is Yes.
         // Write Yes vote to DT Log.
-        dtLog.writeVote(vote);
+        dtLog.writeVote(vote, recoveredState.writtenPlaylistInTransaction);
         // Notify the controller about the send of VOTE_RES.
         notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
                 ActionType.VOTE_RES, "Yes");
@@ -633,7 +646,7 @@ public class Process {
         synchronized (state) {
           state.setType(StateType.COMMITABLE);
         }
-        dtLog.writeState(state);
+        dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
         notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                 ActionType.PRE_COMMIT, "");
         // Wait for controller's response.
@@ -668,7 +681,6 @@ public class Process {
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
-      dtLog.writeEndTransaction();
     }
   }
 
@@ -695,7 +707,7 @@ public class Process {
         synchronized (state) {
           st = state.getType();
         }
-        dtLog.writeState(state);
+        dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
         // Notify the controller about send of STATE_RES.
         config.logger.log(Level.INFO,
                 "Notifying controller that I am abt to send STATE_RES");
@@ -729,7 +741,7 @@ public class Process {
           synchronized (state) {
             state.setType(StateType.COMMITABLE);
           }
-          dtLog.writeState(state);
+          dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
           // Notify the controller about receipt of PRE_COMMIT.
           notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                   ActionType.PRE_COMMIT, "");
@@ -1026,13 +1038,14 @@ public class Process {
   private void recordDecision(StateType st) {
     synchronized (state) {
       state.setType(st);
-      if (st == StateType.COMMITED && !recoveredState.writtenPlaylistInTransaction) {
+      if (st == StateType.COMMITED) {
         updatePlaylist();
-        recoveredState.writtenPlaylistInTransaction = true;
       }
-      dtLog.writeDecision(st.toString());
-      dtLog.writeState(state);
-      dtLog.writePlaylist(playlist);
+      dtLog.writeDecision(st.toString(), recoveredState.writtenPlaylistInTransaction);
+      dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
+      dtLog.writePlaylist(playlist, recoveredState.writtenPlaylistInTransaction);
+      dtLog.writeEndTransaction();
+      recoveredState.writtenPlaylistInTransaction = true;
       config.logger.log(Level.INFO,
               "Reached Decision : " + st.name() + " for current transaction.");
       config.logger.log(Level.INFO, "Updated Playlist:" + playlist.toString());
@@ -1244,11 +1257,13 @@ public class Process {
 
   private void kill() {
     heartBeat.shutdownTimers();
+    nc.shutdown();
     killThread(heartBeat);
     killThread(coordinator);
     killThread(participant);
     killThread(newCoordinator);
     killThread(newParticipant);
+    
   }
 
   /**
@@ -1378,5 +1393,5 @@ public class Process {
   /**
    * Storing the recovered state from DTLog. 
    */
-  private RecoveredState recoveredState;
+  private RecoveredState recoveredState; 
 }

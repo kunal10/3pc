@@ -14,7 +14,6 @@ public class RecoveredState{
     decision = "";
     vote = "No";
     writtenPlaylistInTransaction = false;
-    
   }
   @Override
   public String toString() {

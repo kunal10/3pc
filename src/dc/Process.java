@@ -1,5 +1,7 @@
 package dc;
 
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -98,7 +100,24 @@ public class Process {
   }
   
   public void reviveProcessState(Transaction t, boolean vote){
-    
+    this.transaction = t;
+    this.vote = vote;
+    try {
+      recoveredState = dtLog.parseDTLog();
+      state = new State(recoveredState.state);
+      playlist = recoveredState.playlist;
+    } catch (FileNotFoundException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    } catch (IOException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+    if (heartBeat != null) {
+      heartBeat.stop();
+    }
+    heartBeat = new HeartBeat();
+    heartBeat.start();
   }
 
   /**

@@ -376,6 +376,8 @@ public class Controller {
           if (checkIfCurrentInstructionRevive(currentInstruction)) {
             // TODO: Call the revive method on the process
             config.logger.info("Detected revive instruction");
+            processes[procNum] = new Process(procNum, getCurrentTime(), config);
+            processes[procNum].reviveProcessState(currentTransaction, vote);
             incrementNextInstructionSequenceNum();
           } else
             if (compareInstructionToMessage(currentInstruction, newMessage)) {

@@ -105,10 +105,22 @@ public class IncomingSock extends Thread {
 					
 				}
 			} catch (IOException e) {
-				e.printStackTrace();
+			  try {
+          in.close();
+        } catch (IOException e1) {
+          // TODO Auto-generated catch block
+          e1.printStackTrace();
+        }
+				//e.printStackTrace();
 			} catch (ClassNotFoundException e) {
 				// TODO Auto-generated catch block
-				e.printStackTrace();
+			  try {
+          in.close();
+        } catch (IOException e1) {
+          // TODO Auto-generated catch block
+          e1.printStackTrace();
+        }
+				//e.printStackTrace();
 			}
 		}
 		shutdown();

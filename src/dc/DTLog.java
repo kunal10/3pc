@@ -173,38 +173,6 @@ public class DTLog {
     }
     return rs;
   }
-
-  /**
-   * =======
-   * return null;
-   * 
-   * }
-   * 
-   * class RecoveredState {
-   * public State state;
-   * public Playlist playlist;
-   * public String decision;
-   * 
-   * public RecoveredState() {
-   * state = new State(StateType.UNCERTAIN,
-   * new boolean[config.numProcesses - 1],
-   * new boolean[config.numProcesses - 1]);
-   * playlist = new Playlist();
-   * decision = "";
-   * }
-   * 
-   * @Override
-   *           public String toString() {
-   *           // TODO Auto-generated method stub
-   *           return "DT Log State : " + state.toString() + "..." +
-   *           playlist.toString()
-   *           + "..." + decision;
-   *           }
-   *           }
-   * 
-   *           /*
-   *           >>>>>>> Adding logic for total failure case
-   *           Config for the process owning this DT log.
-   */
+  
   private Config config;
 }

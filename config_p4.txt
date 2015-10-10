@@ -11,3 +11,4 @@ port3=5003
 port4=5004
 procNum=4
 logfile=LogP4.txt
+DTFilename=DT4.txt

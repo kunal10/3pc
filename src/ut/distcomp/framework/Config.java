@@ -46,6 +46,7 @@ public class Config {
 			addresses[i] = InetAddress.getByName(prop.getProperty("host" + i).trim());
 		}
 		simulationConfig = prop.getProperty("SimulationConfig");
+		DTFilename = prop.getProperty("DTFilename");
 		if (prop.getProperty("procNum") != null) {
 			procNum = loadInt(prop,"procNum");
 		} else {
@@ -97,4 +98,9 @@ public class Config {
 	 * Simulation config to be simulated. Used by controller.
 	 */
 	public String simulationConfig;
+	
+	/**
+	 * Name of the DT log to be created.
+	 */
+	public String DTFilename;
 }

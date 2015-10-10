@@ -399,12 +399,12 @@ public class Controller {
                 + procNum + ": " + currentInstruction.toString() + " Seq No:"
                 + currentInstructionSeqNum);
       }
-      boolean hasProcessDecided = false;
-      while (!hasProcessDecided) {
+      boolean isTransactionComplete = false;
+      while (!isTransactionComplete) {
         try {
           Message m = messageQueue[procNum].take();
           config.logger.info("Checking if decision reached using :"+m.toString());
-          hasProcessDecided = checkIfProcessHasDecided(m);
+          isTransactionComplete = isTransactionComplete(m);
           sendContinueToProcess(m);
         } catch (InterruptedException e) {
           config.logger.log(Level.WARNING,
@@ -458,22 +458,22 @@ public class Controller {
      * @param m
      * @return
      */
-    private boolean checkIfProcessHasDecided(Message m) {
-      boolean decisionTaken = false;
-      if(m.getSrcType() == NodeType.COORDINATOR){
-        decisionTaken = m.getAction().getType() == ActionType.DECISION && m.getNotificationType() == NotificationType.SEND;
-      }
-      else{
-        decisionTaken = m.getAction().getType() == ActionType.DECISION && m.getNotificationType() == NotificationType.RECEIVE;
-      }
-      
+    private boolean isTransactionComplete(Message m) {
+      boolean complete = false;
+      boolean decisionTaken = (m.getAction().getType() == ActionType.DECISION);
       if (decisionTaken) {
-        config.logger.info("Process " + procNum + " has decided using"
-                + m.toString());
+        if ((m.getSrcType() == NodeType.COORDINATOR
+                && m.getNotificationType() == NotificationType.SEND)
+                || (m.getSrcType() != NodeType.COORDINATOR && m
+                        .getNotificationType() == NotificationType.RECEIVE)) {
+          complete = true;
+          config.logger.info("Process " + procNum + " has decided "
+                  + m.getAction().getType());
+        }
       }
-      config.logger.info("Process " + procNum + " has not decided using"
-              + m.toString());
-      return decisionTaken;
+      config.logger.info("Process " + procNum + " has not decided "
+              + m.getAction().getType());
+      return complete;
     }
 
     /**

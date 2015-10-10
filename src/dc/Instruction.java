@@ -14,6 +14,7 @@ import dc.Message.NotificationType;
  *         controller based on the config.
  */
 public class Instruction implements Serializable{
+  private static final long serialVersionUID = 1L;
 
   public Instruction(InstructionType instructionType, String executionOrder,
           NotificationType notificationType, ActionType actionType, int n,
@@ -102,10 +103,12 @@ public class Instruction implements Serializable{
 
   @Override
   public String toString() {
-    // TODO Auto-generated method stub
-    return instructionType.toString() + " " + executionOrder + " "
-            + notificationType.toString() + " " + actionType.toString() + " "
-            + partialSteps;
+    StringBuilder result = new StringBuilder();
+    result.append("\nInstructionType: " + instructionType.name());
+    result.append("\tExecutionOrder: " + executionOrder);
+    result.append("\tActionType:" + actionType.name());
+    result.append("\tPartialSteps:" + partialSteps);
+    return result.toString();
   }
 
   public static void main(String[] args) {

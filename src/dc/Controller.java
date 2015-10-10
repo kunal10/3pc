@@ -106,7 +106,7 @@ public class Controller {
    * @param filename
    */
   private void readSimulationConfig(String filename) {
-    sc = new SimulationConfig("SimulationConfig1");
+    sc = new SimulationConfig(filename);
     sc.processInstructions();
   }
 
@@ -243,10 +243,12 @@ public class Controller {
      */
     private void sendMessageToCoordinatorAndParticipant(Message m) {
       nc.sendMsg(procNum, m);
-      if (procNum == currentCoordinatorId) {
-        m.setDestType(NodeType.COORDINATOR);
-        nc.sendMsg(procNum, m);
-      }
+      /*
+       * if (procNum == currentCoordinatorId) {
+       * m.setDestType(NodeType.COORDINATOR);
+       * nc.sendMsg(procNum, m);
+       * }
+       */
     }
 
     /**
@@ -259,6 +261,8 @@ public class Controller {
      * @return
      */
     private boolean compareInstructionToMessage(Instruction i, Message m) {
+      config.logger.info("Inside CompareItoM Message:" + m.toString()
+              + "\nInstruction:" + i.toString());
       return (m.getAction().getType() == i.getActionType()
               && m.getNotificationType() == i.getNotificationType());
     }
@@ -273,10 +277,15 @@ public class Controller {
      */
     private void sendHaltToProcess(Instruction i, Message m) {
       m.setSrcType(NodeType.CONTROLLER);
+      m.setDest(m.getSrc());
+      m.setDestType(m.getSrcType());
       m.setSrc(0);
+      m.setSrcType(NodeType.CONTROLLER);
       m.setInstr(i);
+      nc.sendMsg(m.getDest(), m);
       config.logger.info("Detected halt");
-      for (int i1 = 1; i1 < config.numProcesses; i1++) {
+      
+      /*for (int i1 = 1; i1 < config.numProcesses; i1++) {
         m.setDest(i1);
         m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
         nc.sendMsg(i1, m);
@@ -309,7 +318,7 @@ public class Controller {
           nc.sendMsg(i1, m);
           config.logger.info("RESUME Sent " + m.toString() + " to " + i1);
         }
-      }
+      }*/
     }
 
     /**
@@ -352,7 +361,8 @@ public class Controller {
        * NodeType.PARTICIPANT, System.currentTimeMillis());
        * sendMessageToCoordinatorAndParticipant(startMessage);
        */
-      for (Instruction currentInstruction : indiviualInstructionQueue) {
+      while (!indiviualInstructionQueue.isEmpty()) {
+        Instruction currentInstruction = indiviualInstructionQueue.peek();
         currentInstructionSeqNum = indiviualInstructionQueue.peek().getSeqNo();
         try {
           Message newMessage = messageQueue[procNum].take();
@@ -369,13 +379,13 @@ public class Controller {
             incrementNextInstructionSequenceNum();
           } else
             if (compareInstructionToMessage(currentInstruction, newMessage)) {
-            while (currentInstruction.getSeqNo() == minSeqNumber) {
+            while (currentInstruction.getSeqNo() != minSeqNumber) {
             }
             config.logger.info("Executing instruction with seq no "
                     + currentInstruction.getSeqNo());
             // Send the instruction to process
             sendInstructionToProcess(currentInstruction, newMessage);
-
+            indiviualInstructionQueue.removeFirst();
           } else {
             // Send Continue
             sendContinueToProcess(newMessage);
@@ -389,11 +399,12 @@ public class Controller {
                 + procNum + ": " + currentInstruction.toString() + " Seq No:"
                 + currentInstructionSeqNum);
       }
-      boolean hasProcessDecided = false;
-      while (!hasProcessDecided) {
+      boolean isTransactionComplete = false;
+      while (!isTransactionComplete) {
         try {
           Message m = messageQueue[procNum].take();
-          hasProcessDecided = checkIfProcessHasDecided(m);
+          config.logger.info("Checking if decision reached using :"+m.toString());
+          isTransactionComplete = isTransactionComplete(m);
           sendContinueToProcess(m);
         } catch (InterruptedException e) {
           config.logger.log(Level.WARNING,
@@ -409,6 +420,7 @@ public class Controller {
      */
     private void sendContinueToProcess(Message newMessage) {
       // Only the instruction type matters. All others are dummy values.
+      config.logger.info("Sending continue to message "+newMessage.toString()+ " Proc "+procNum);
       newMessage.setInstr(new Instruction(InstructionType.CONTINUE, "",
               NotificationType.DELIVER, ActionType.ACK, -1, procNum, -1));
       // Check
@@ -441,20 +453,27 @@ public class Controller {
     /**
      * Check if a process has sent a decision message.
      * Use this in deciding whether you have to finish this transaction.
-     * 
+     * TODO: Add logic for coordinator. Match on notification type as well.
+     * For coordinator its SEND. All others its RECEIVE. 
      * @param m
      * @return
      */
-    private boolean checkIfProcessHasDecided(Message m) {
-      // TODO Auto-generated method stub
-      boolean decisionTaken = m.getAction().getType() == ActionType.DECISION;
+    private boolean isTransactionComplete(Message m) {
+      boolean complete = false;
+      boolean decisionTaken = (m.getAction().getType() == ActionType.DECISION);
       if (decisionTaken) {
-        config.logger.info("Process " + procNum + " has decided "
-                + m.getAction().getType());
+        if ((m.getSrcType() == NodeType.COORDINATOR
+                && m.getNotificationType() == NotificationType.SEND)
+                || (m.getSrcType() != NodeType.COORDINATOR && m
+                        .getNotificationType() == NotificationType.RECEIVE)) {
+          complete = true;
+          config.logger.info("Process " + procNum + " has decided "
+                  + m.getAction().getType());
+        }
       }
       config.logger.info("Process " + procNum + " has not decided "
               + m.getAction().getType());
-      return decisionTaken;
+      return complete;
     }
 
     /**

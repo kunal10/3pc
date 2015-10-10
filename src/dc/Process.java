@@ -1,6 +1,5 @@
 package dc;
 
-import java.time.chrono.IsoChronology;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -33,6 +32,9 @@ public class Process {
     this.pId = pId;
     // TODO : Populate this from DT Log in case of recovery.
     this.playlist = new Playlist();
+    
+    // Initialize DT Log 
+    dtLog = new DTLog(config);
 
     // Initialize all Blocking queues
     // TODO : Figure out if these should be initialized before all transactions.
@@ -42,7 +44,9 @@ public class Process {
 
     coordinatorQueue = new LinkedBlockingQueue<>();
     coordinatorControllerQueue = new LinkedBlockingQueue<>();
-    
+
+    received = new HashMap<Integer, String>();
+
     this.config = config;
 
     // Initialize Net Controller. Pass all the queues required.
@@ -56,7 +60,7 @@ public class Process {
     this.vote = true;
     this.startTime = startTime;
   }
-  
+
   /**
    * This method should be called by controller before sending a start message
    * for a new transaction.
@@ -93,6 +97,10 @@ public class Process {
     heartBeat.start();
   }
   
+  public void reviveProcessState(Transaction t, boolean vote){
+    
+  }
+
   /**
    * This thread is used for sending periodic heart beats to every process in
    * the network. Every heart beat contains the state of the process at the time
@@ -113,6 +121,8 @@ public class Process {
      * Timer to use for scheduling tasks.
      */
     Timer timer;
+    // TimerTask to send heart beats
+    TimerTask tt;
 
     public HeartBeat() {
       exisitingTimers = new HashMap<>();
@@ -137,8 +147,56 @@ public class Process {
       }
 
       public void run() {
+        config.logger.info("Detected death of " + processToRemoveFromUpSet);
         exisitingTimers.remove(processToRemoveFromUpSet);
         state.removeProcessFromUpset(processToRemoveFromUpSet);
+        config.logger.log(Level.INFO, "Current cId " + cId);
+        if (processToRemoveFromUpSet == cId) {
+          config.logger.log(Level.INFO, "Detected death of Coord");
+          if (participant != null) {
+            try {
+              participant.join();
+              config.logger.log(Level.INFO, "Participant Thread: " + pId
+                      + "returned on death of new Coordinator");
+              participant = null;
+            } catch (InterruptedException e) {
+              // TODO Auto-generated catch block
+              e.printStackTrace();
+            }
+          }
+          if (newParticipant != null) {
+            try {
+              newParticipant.join();
+              config.logger.log(Level.INFO, "New Participant Thread: " + pId
+                      + "returned on death of new Coordinator");
+            } catch (InterruptedException e) {
+              // TODO Auto-generated catch block
+              e.printStackTrace();
+            }
+          }
+          boolean[] curUpset = getUpset();
+          int minAliveParticipant = pId;
+          for (int i = 1; i < numProcesses; i++) {
+            if (curUpset[i]) {
+              minAliveParticipant = i;
+              break;
+            }
+          }
+          synchronized (state) {
+            cId = minAliveParticipant;
+            if (cId == pId) {
+              config.logger.log(Level.INFO,
+                      "Spawning New Coordinator Thread for: " + pId);
+              newCoordinator = new NewCoordinator();
+              newCoordinator.start();
+            } else {
+              config.logger.log(Level.INFO,
+                      "Spawning New Participant Thread for: " + pId);
+              newParticipant = new NewParticipant();
+              newParticipant.start();
+            }
+          }
+        }
       }
     }
 
@@ -155,10 +213,10 @@ public class Process {
           Message m = null;
           if (state.getUpset()[dest]) {
             m = new Message(pId, dest, srcType, Message.NodeType.PARTICIPANT,
-                    curTime);
+                    state, curTime);
           } else {
             m = new Message(pId, dest, srcType,
-                    Message.NodeType.NON_PARTICIPANT, curTime);
+                    Message.NodeType.NON_PARTICIPANT, state, curTime);
           }
           nc.sendMsg(dest, m);
         }
@@ -166,7 +224,7 @@ public class Process {
     }
 
     private void addTimerToExistingTimer(int i) {
-      int delay = 1200;
+      int delay = 1100;
       TimerTask tti = new ProcessKillOnTimeoutTask(i);
       exisitingTimers.put(i, tti);
       timer.schedule(tti, delay);
@@ -181,8 +239,15 @@ public class Process {
      * processes.
      */
     public void processHeartBeat() {
-      while (!heartbeatQueue.isEmpty()) {
-        Message m = heartbeatQueue.remove();
+      while (true) {
+        Message m = null;
+        try {
+          m = heartbeatQueue.take();
+        } catch (InterruptedException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+        // config.logger.info("Consumed Heartbeat of "+m.getSrc());
         // Disable the timer if a timer is running for that process.
         if (exisitingTimers.containsKey(m.getSrc())) {
           exisitingTimers.get(m.getSrc()).cancel();
@@ -196,14 +261,17 @@ public class Process {
           dc.State s = m.getState();
           if (s.isTerminalState()) {
             recordDecision(s.getType());
-            updatePlaylist();
-            notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
-                    ActionType.DECISION, s.getType().name());
             // Return since we don't need to process any more messages.
             return;
           }
         }
       }
+    }
+
+    public void shutdownTimers() {
+      tt.cancel();
+      timer.cancel();
+      config.logger.info("Shut down timers");
     }
 
     public void run() {
@@ -216,7 +284,7 @@ public class Process {
       // On kill this timer should be killed using tt.cancel(); timer.cancel();
       // TODO: Register timer threads for killing later.
 
-      TimerTask tt = new SendHeartBeatTask();
+      tt = new SendHeartBeatTask();
       timer.schedule(tt, 0, freq);
 
       // Initialize all the timers to track heartbeat of other processes.
@@ -266,15 +334,18 @@ public class Process {
         }
       }
     }
-
-    /**
+/*
+    *//**
      * @return Returns true if all processes voted yes, false if any of the
      *         process died before voting or it voted no.
      * @throws InterruptedException
-     */
+     *//*
     private boolean waitForVotes() throws InterruptedException {
       int receivedVotes = 0, numParticipants = numProcesses - 1;
       while (receivedVotes < numParticipants) {
+        // TODO : **BUG** We should maintain a hashmap of votes and check if
+        // someone who has not voted has died. Currently even if process is
+        // dying after casting its vote we are returning false from here.
         if (!allParticipantsAlive()) {
           return false;
         }
@@ -293,7 +364,7 @@ public class Process {
         }
       }
       return true;
-    }
+    }*/
 
     /**
      * Waits till it receives Acks from all alive processes.
@@ -312,8 +383,10 @@ public class Process {
       }
     }
 
+
     public void run() {
       Message msg = null;
+      int steps = -1;
       try {
         // Notify controller about starting of 3PC.
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
@@ -321,60 +394,130 @@ public class Process {
         // Wait for controller's response.
         msg = coordinatorControllerQueue.take();
         executeInstruction(msg);
-
-        // Send partial or complete VOTE_REQ.
-        int steps = msg.getInstr().getPartialSteps();
-        sendPartial(ActionType.VOTE_REQ, steps);
-        // TODO : Write 3PC in DT log.
         // Notify controller about send of VOTE_REQ.
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                 ActionType.VOTE_REQ, Integer.toString(steps));
         // Wait for controller's response.
         msg = coordinatorControllerQueue.take();
+        // Send partial or complete VOTE_REQ.
+        steps = msg.getInstr().getPartialSteps();
+        config.logger.log(Level.INFO, "Coord sending vote req");
+        sendPartialMsg(ActionType.VOTE_REQ, steps);
         executeInstruction(msg);
 
         // Wait for votes from all processes.
-        boolean vote = waitForVotes();
+        String overallVote = waitForParticipantMsg(ActionType.VOTE_RES);
         // Notify controller about receipt of VOTE_RES.
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
                 ActionType.VOTE_RES, msg.getAction().getValue());
         // Wait for controller's response.
         msg = coordinatorControllerQueue.take();
         executeInstruction(msg);
-        steps = msg.getInstr().getPartialSteps();
 
-        if (!vote) {
+        // If some participant died before voting or voted No, abort.
+        if (overallVote.compareToIgnoreCase("No") == 0 || !vote) {
           // TODO : Write Abort in DT Log.
-          recordDecision(StateType.ABORTED);
-          // Send Abort to all participants who voted yes and are alive.
-          sendDecision(StateType.ABORTED, steps);
+          // Notify controller and send the decision.
+          notifyAndSendDecision(StateType.ABORTED);
           return;
         }
 
-        // Send precommit to all participants who voted yes and are alive.
-        sendPartial(ActionType.PRE_COMMIT, steps);
-        // Notify controller about send of Precommit.
+        // Everyone voted Yes.
+        // Update state to commitable.
+        synchronized (state) {
+          state.setType(StateType.COMMITABLE);
+        }
+        // TODO : Write Commitable state to DT Log.
+
+        // Notify controller about send of PRE_COMMIT.
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
-                ActionType.PRE_COMMIT, msg.getAction().getValue());
+                ActionType.PRE_COMMIT, "");
         // Wait for controller's response.
         msg = coordinatorControllerQueue.take();
+        steps = msg.getInstr().getPartialSteps();
+        sendPartialMsg(ActionType.PRE_COMMIT, steps);
         executeInstruction(msg);
 
-        // Wait for ack from all the participants.
-        waitForAck();
-        // Notify controller about receipt of ACK.
-        notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
-                ActionType.ACK, "");
-        // Wait for controller's response.
-        msg = coordinatorControllerQueue.take();
-        executeInstruction(msg);
-
-        // Write Commit in DT Log.
+        // Wait for Acks from all operational processes.
+        waitForParticipantMsg(ActionType.ACK);
+        // TODO : Write Decision in DT Log.
         recordDecision(StateType.COMMITED);
-        sendDecision(StateType.COMMITED, steps);
+        // Notify controller and send the decision.
+        notifyAndSendDecision(StateType.COMMITED);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
+    }
+  }
+
+  class NewCoordinator extends Thread {
+    public void run() {
+      Message msg = null;
+      int steps = -1;
+      try {
+        // Notify controller about send of STATE_REQ.
+        notifyController(NodeType.COORDINATOR, NotificationType.SEND,
+                ActionType.STATE_REQ, "");
+        // Wait for controller's response.
+        msg = coordinatorControllerQueue.take();
+        steps = msg.getInstr().getPartialSteps();
+        sendPartialMsg(ActionType.STATE_REQ, steps);
+        executeInstruction(msg);
+
+        // Wait for state report message from all participants.
+        // Ignore the ones who have died since send of STATE_REQ.
+        String stateReport = waitForParticipantMsg(ActionType.STATE_RES);
+        StateType reportedSt = StateType.valueOf(stateReport);
+        StateType coordSt = state.getType();
+        if (dc.State.isTerminalStateType(reportedSt)
+                || dc.State.isTerminalStateType(coordSt)) {
+          // If coordinator had not reached a decision before then it records it
+          if (coordSt == StateType.UNCERTAIN) {
+            // Write Decision in DT Log.
+            recordDecision(reportedSt);
+          } else {
+            // Updated reported state with coordinator's state.
+            reportedSt = coordSt;
+          }
+          // Notify controller and send the decision.
+          notifyAndSendDecision(reportedSt);
+        } else if (reportedSt == StateType.UNCERTAIN
+                && coordSt == StateType.UNCERTAIN) {
+          // All participants and the coordinator are uncertain so abort.
+          reportedSt = StateType.ABORTED;
+          // TODO : Write Decision in DT Log.
+          recordDecision(reportedSt);
+          // Notify controller and send the decision.
+          notifyAndSendDecision(reportedSt);
+        } else {
+          // Some processes reported committable state.
+
+          // Update state to commitable.
+          synchronized (state) {
+            state.setType(StateType.COMMITABLE);
+          }
+          // TODO : Write Commitable state to DT Log.
+
+          // Notify controller about send of PRE_COMMIT.
+          notifyController(NodeType.COORDINATOR, NotificationType.SEND,
+                  ActionType.PRE_COMMIT, "");
+          // Wait for controller's response.
+          msg = coordinatorControllerQueue.take();
+          steps = msg.getInstr().getPartialSteps();
+          sendPartialMsg(ActionType.PRE_COMMIT, steps);
+          executeInstruction(msg);
+
+          // Wait for Acks from all operational processes.
+          waitForParticipantMsg(ActionType.ACK);
+          // TODO : Write Decision in DT Log.
+          recordDecision(StateType.COMMITED);
+          // Notify controller and send the decision.
+          notifyAndSendDecision(reportedSt);
+        }
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+      return;
     }
   }
 
@@ -385,7 +528,8 @@ public class Process {
    * before receipt of VOTE_REQ).
    */
   class Participant extends Thread {
-    /**
+/*<<<<<<< HEAD
+    *//**
      * This inherently assumes that coordinator is fixed when this function is
      * being executed. This is fine since when a current coordinator dies,
      * heart beat thread should first stop the process's participant thread
@@ -394,7 +538,7 @@ public class Process {
      * 
      * @param at
      * @param value
-     */
+     *//*
     private void sendToCoordinator(ActionType at, String value) {
       Action action = new Action(at, value);
       Message msg = new Message(pId, cId, NodeType.PARTICIPANT,
@@ -402,7 +546,7 @@ public class Process {
       nc.sendMsg(cId, msg);
     }
 
-    /**
+    *//**
      * Wait for specified message from Coordinator. If it instead gets
      * a STATE_REQ here, then it waits for heart beat to detect death of
      * previous coordinator and spawn a new participant thread which will
@@ -415,7 +559,7 @@ public class Process {
      * NOTE : It does not consume STATE_REQ message if coordinator has died.
      * 
      * @return
-     */
+     *//*
     private boolean waitForMessage(ActionType expAction) {
       while (true) {
         if (expAction == ActionType.VOTE_REQ) {
@@ -462,23 +606,28 @@ public class Process {
       }
     }
 
+=======
+>>>>>>> 14838d1b5af8c1b4cc558846ebb8df0598d0dd90*/
     public void run() {
       Message msg = null;
       try {
-        boolean receivedVoteReq = waitForMessage(ActionType.VOTE_REQ);
+        // Notify controller about starting of 3PC.
+        notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                ActionType.START, "");
+        // Wait for controller's response.
+        msg = controllerQueue.take();
+        executeInstruction(msg);
+
+        boolean receivedVoteReq = waitForCoordinatorMsg(ActionType.VOTE_REQ,
+                msg);
         if (!receivedVoteReq) {
-          if (pId == cId) {
-            // Coordinator thread takes the decision and updates the playlist.
-            // Although this should never happen if Coordinator is alive in
-            // which case we will never reach here.
-            return;
-          }
           // TODO Write abort in DT Log.
           recordDecision(StateType.ABORTED);
           return;
         }
 
         // Notify the controller about receipt of VOTE_REQ.
+        config.logger.info("Notifying receipt of Vote request");
         notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                 ActionType.VOTE_REQ, "");
         // Wait for controller's response.
@@ -487,11 +636,13 @@ public class Process {
 
         // If participant's vote is No.
         if (!vote) {
+          // Notify the controller about the send of VOTE_RES.
+          notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
+                  ActionType.VOTE_RES, "No");
           sendToCoordinator(ActionType.VOTE_RES, "No");
-          if (pId == cId) {
-            // Coordinator thread takes the decision and updates the playlist.
-            return;
-          }
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
           // TODO Write decision to DT Log.
           recordDecision(StateType.ABORTED);
           return;
@@ -499,49 +650,58 @@ public class Process {
 
         // If participant's vote is Yes.
         // TODO Write Yes vote to DT Log.
-        sendToCoordinator(ActionType.VOTE_RES, "Yes");
-
         // Notify the controller about the send of VOTE_RES.
-        notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+        notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
                 ActionType.VOTE_RES, "Yes");
+        sendToCoordinator(ActionType.VOTE_RES, "Yes");
         // Wait for controller's response.
         msg = controllerQueue.take();
         executeInstruction(msg);
 
-        boolean receivedPrecommit = waitForMessage(ActionType.PRE_COMMIT);
-        // Notify the controller about receipt of Precommit/Abort.
-        notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
-                ActionType.PRE_COMMIT, "");
-        // Wait for controller's response.
-        msg = controllerQueue.take();
-        executeInstruction(msg);
-
+        boolean receivedPrecommit = waitForCoordinatorMsg(ActionType.PRE_COMMIT,
+                msg);
         if (!receivedPrecommit) {
-          if (pId == cId) {
-            // Coordinator thread takes the decision and updates the playlist.
-            return;
-          }
+          config.logger.log(Level.INFO, "Returning on death of current coord");
+          return;
+        }
+
+        if (msg.getAction().getType() == ActionType.DECISION) {
+          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                  ActionType.DECISION, "ABORT");
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
           // TODO Write decision to DT Log.
           recordDecision(StateType.ABORTED);
           config.logger.info("Received Abort for the transaction. Aborting.");
           return;
         }
 
-        // Send Ack to coordinator.
-        sendToCoordinator(ActionType.ACK, "");
-        // Notify the controller about sending of ACK.
-        notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
-                ActionType.ACK, "");
+        // Notify the controller about receipt of Precommit.
+        synchronized (state) {
+          state.setType(StateType.COMMITABLE);
+        }
+        notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                ActionType.PRE_COMMIT, "");
         // Wait for controller's response.
         msg = controllerQueue.take();
         executeInstruction(msg);
 
-        boolean receivedCommit = waitForMessage(ActionType.DECISION);
+        // Notify the controller about sending of ACK.
+        notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
+                ActionType.ACK, "");
+        // Send Ack to coordinator.
+        sendToCoordinator(ActionType.ACK, "");
+        // Wait for controller's response.
+        msg = controllerQueue.take();
+        executeInstruction(msg);
+
+        boolean receivedCommit = waitForCoordinatorMsg(ActionType.DECISION,
+                msg);
         if (!receivedCommit) {
-          // This should never happen as either participant will receive commit
-          // or detect death of coordinator and spawn new participant thread and
-          // flow will never reach here.
-          config.logger.log(Level.SEVERE, "waitForCommit received false.");
+          // If received some unexpected action or STATE_REQ from higher
+          // coordinator.
+          return;
         }
 
         // Notify the controller about receipt of COMMIT.
@@ -550,21 +710,354 @@ public class Process {
         // Wait for controller's response.
         msg = controllerQueue.take();
         executeInstruction(msg);
-        if (pId == cId) {
-          // Coordinator thread takes the decision and updates the playlist.
-          return;
-        }
         // TODO Write Commit to DT Log.
         recordDecision(StateType.COMMITED);
-        updatePlaylist();
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
     }
   }
 
-  public synchronized State getState() {
-    return state;
+  class NewParticipant extends Thread {
+    public void run() {
+      Message msg = null;
+      try {
+        boolean recvStateReq = waitForCoordinatorMsg(ActionType.STATE_REQ, msg);
+        if (!recvStateReq) {
+          // If received some unexpected action or STATE_REQ from higher
+          // coordinator.
+          return;
+        }
+
+        // Notify the controller about receipt of STATE_REQ.
+        config.logger.log(Level.INFO, "Notifying receipt of STATE_REQ");
+        notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                ActionType.STATE_REQ, "");
+        // Wait for controller's response.
+        msg = controllerQueue.take();
+        executeInstruction(msg);
+
+        StateType st = null;
+        synchronized (state) {
+          st = state.getType();
+        }
+
+        // Notify the controller about send of STATE_RES.
+        config.logger.log(Level.INFO,
+                "Notifying controller that I am abt to send STATE_RES");
+        notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
+                ActionType.STATE_RES, "");
+        // Wait for controller's response.
+        msg = controllerQueue.take();
+        executeInstruction(msg);
+        sendToCoordinator(ActionType.STATE_RES, st.name());
+
+        boolean recvPrecommitOrAbort = waitForCoordinatorMsg(
+                ActionType.PRE_COMMIT, msg);
+        StateType decision = StateType.valueOf(msg.getAction().getValue());
+        if (!recvPrecommitOrAbort) {
+          // If received some unexpected action or STATE_REQ from higher
+          // coordinator.
+          return;
+        }
+
+        if (dc.State.isTerminalStateType(decision)) {
+          // Notify the controller about receipt of decision.
+          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                  ActionType.DECISION, decision.name());
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
+          // TODO Write decision to DT Log.
+          recordDecision(decision);
+          return;
+        } else if (decision == StateType.COMMITABLE) {
+          synchronized (state) {
+            state.setType(StateType.COMMITABLE);
+          }
+          // Notify the controller about receipt of PRE_COMMIT.
+          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                  ActionType.PRE_COMMIT, "");
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
+
+          // Notify the controller about sending of ACK.
+          notifyController(NodeType.PARTICIPANT, NotificationType.SEND,
+                  ActionType.ACK, "");
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
+          // Send Ack to coordinator.
+          sendToCoordinator(ActionType.ACK, "");
+
+
+          boolean receivedCommit = waitForCoordinatorMsg(ActionType.DECISION,
+                  msg);
+          if (!receivedCommit) {
+            // If received some unexpected action or STATE_REQ from higher
+            // coordinator.
+            return;
+          }
+
+          // Notify the controller about receipt of COMMIT.
+          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+                  ActionType.DECISION, "Commit");
+          // Wait for controller's response.
+          msg = controllerQueue.take();
+          executeInstruction(msg);
+          // TODO Write Commit to DT Log.
+          recordDecision(StateType.COMMITED);
+        } else {
+          config.logger.log(Level.SEVERE,
+                  "waitForCoordinatorResponse did not set correct decision");
+          return;
+        }
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
+  /**
+   * Send partial/full message depending on number of specified steps.
+   * Does not send message to itself and non operational processes.
+   * 
+   * @param at
+   * @param steps
+   */
+  private void sendPartialMsg(ActionType at, int steps) {
+    Message msg = null;
+    Action action = new Action(at, "");
+    boolean[] curUpset = getUpset();
+    if (steps == -1) {
+      steps = curUpset.length;
+    }
+    for (int i = 1; steps > 0 && i < curUpset.length; i++) {
+      if (i == pId || !curUpset[i] || !received.containsKey(i)) {
+        // Don't send the message to the following :
+        // 1. Itself
+        // 2. Non-operational processes
+        // 3. Processes who are not uncertain.
+      }
+      msg = new Message(pId, i, NodeType.COORDINATOR, NodeType.PARTICIPANT,
+              action, getCurTime());
+      nc.sendMsg(i, msg);
+      steps--;
+    }
+  }
+
+  /**
+   * Waits till it receives messages from all participants except itself.
+   * NOTE : Resets the received map every time it is called.
+   * TODO : Make this more modular.
+   */
+  private String waitForParticipantMsg(ActionType expAction) {
+    received = new HashMap<Integer, String>();
+    boolean receivedAllOperational = false;
+    while (!receivedAllOperational) {
+      if (!coordinatorQueue.isEmpty()) {
+        // Consume message and add to the hashmap.
+        Message msg = coordinatorQueue.remove();
+        ActionType receivedAction = msg.getAction().getType();
+        if (receivedAction != expAction) {
+          config.logger.log(Level.SEVERE,
+                  "Expecting : " + expAction.name() + "Received : "
+                          + receivedAction + " from process: " + msg.getSrc());
+        }
+        // Received expected message from the participant.
+        received.put(msg.getSrc(), msg.getAction().getValue());
+        config.logger.log(Level.INFO, "Received " + expAction.name()
+                + " from process: " + msg.getSrc());
+      }
+      receivedAllOperational = true;
+      for (int i = 1; i < numProcesses; i++) {
+        // Won't receive a message from itself.
+        if (i == pId) {
+          continue;
+        }
+        // If process is still operational but not received the message then
+        // continue waiting.
+        if (isOperational(i) && !received.containsKey(i)) {
+          receivedAllOperational = false;
+        }
+      }
+    }
+    // Iterate over the hash map and return value appropriate for specified
+    // action.
+    String result = "";
+    for (int key = 1; key < numProcesses; key++) {
+      if (key == cId) {
+        continue;
+      }
+      if (expAction == ActionType.STATE_RES) {
+        if (!isOperational(key)) {
+          continue;
+        }
+        result = StateType.UNCERTAIN.name();
+        if (!received.containsKey(key)) {
+          config.logger.log(Level.SEVERE,
+                  "Did not receive msg from operational process:" + key);
+          return "";
+        }
+        StateType st = StateType.valueOf(received.get(key));
+        if (State.isTerminalStateType(st)) {
+          return st.name();
+        }
+      } else if (expAction == ActionType.VOTE_RES) {
+        result = "Yes";
+        // Return No if someone did not vote or voted No.
+        if (!received.containsKey(key)
+                || received.get(key).compareToIgnoreCase("No") == 0) {
+          config.logger.log(Level.INFO, "Inside xyz");
+          return "No";
+        }
+      } else if (expAction == ActionType.ACK) {
+        return result;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * This inherently assumes that coordinator is fixed when this function is
+   * being executed. This is fine since when a current coordinator dies,
+   * heart beat thread should wait for process's participant thread to terminate
+   * before modifying cId. Otherwise this method will send the message to the
+   * new Coordinator.
+   * 
+   * @param at
+   * @param value
+   */
+  private void sendToCoordinator(ActionType at, String value) {
+    Action action = new Action(at, value);
+    Message msg = new Message(pId, cId, NodeType.PARTICIPANT,
+            NodeType.COORDINATOR, action, getCurTime());
+    nc.sendMsg(cId, msg);
+  }
+
+  private boolean waitForVoteReq() {
+    while (true) {
+      Message msg = null;
+      ActionType recvAction = null;
+      if (!Process.this.isAlive(1)) {
+        config.logger.log(Level.INFO,
+                "Detected death of 1st Coordinator while waiting for "
+                        + "VOTE_REQ");
+        return false;
+      }
+
+      // We can't use take here since we could receive a STATE_REQ from a new
+      // coordinator which should be consumed by a new participant thread.
+      synchronized (commonQueue) {
+        if (commonQueue.isEmpty()) {
+          continue;
+        }
+        msg = commonQueue.peek();
+      }
+      recvAction = msg.getAction().getType();
+
+      // Received STATE_REQ.
+      if (recvAction == ActionType.STATE_REQ) {
+        config.logger.log(Level.INFO, "Waiting for VOTE_REQ. Revceived: "
+                + msg.toString() + "\n Current Coordinator must have died.");
+        // Heart beat should detect death of current coordinator and
+        // spawn a new participant thread which will consume this STATE_REQ
+        return false;
+      } else if (recvAction != ActionType.VOTE_REQ) {
+        // Received unexpected action.
+        config.logger.log(Level.SEVERE, "Waiting for "
+                + ActionType.VOTE_REQ.name() + " Revceived: " + msg.toString());
+        return false;
+      } else {
+        // Received VOTE_REQ.
+        msg = commonQueue.remove();
+        config.logger.log(Level.INFO,
+                "Received " + recvAction.name() + "from Coordinator");
+        return true;
+      }
+    }
+  }
+
+  /**
+   * Wait for specified message from Coordinator. If it instead gets
+   * a STATE_REQ from higher coordinator here, then it returns false.
+   * Heart beat should wait for Participant/NewParticipant threads to terminate
+   * before updating the cId and spawning NewPaticipant threads.
+   * 
+   * NOTE : It does not consume STATE_REQ message from higher coordinator.
+   * 
+   * @return
+   */
+  private boolean waitForCoordinatorMsg(ActionType expAction,
+          Message response) {
+    if (expAction == ActionType.VOTE_REQ) {
+      return waitForVoteReq();
+    }
+    while (true) {
+      Message msg = null;
+      ActionType recvAction = null;
+      // We can't use take here since we could receive a STATE_REQ from a new
+      // coordinator which should be consumed by a new participant thread.
+      synchronized (commonQueue) {
+        if (commonQueue.isEmpty()) {
+          if (!isAlive(cId)) {
+            return false;
+          }
+          continue;
+        }
+        msg = commonQueue.peek();
+      }
+      recvAction = msg.getAction().getType();
+
+      // Received unexpected action.
+      if (recvAction != expAction) {
+        if (recvAction == ActionType.STATE_REQ) {
+          config.logger.log(Level.INFO, "Waiting for " + expAction.name()
+                  + " from : " + cId + " Revceived: " + msg.getSrc());
+          return false;
+        } else if (expAction == ActionType.PRE_COMMIT
+                && recvAction == ActionType.DECISION) {
+          config.logger.log(Level.INFO, "Waiting for " + expAction.name()
+                  + " Revceived: " + msg.toString());
+          response.setAction(new Action(recvAction, StateType.ABORTED.name()));
+          return true;
+        }
+        config.logger.log(Level.SEVERE, "Waiting for " + expAction.name()
+                + " Revceived: " + msg.toString());
+        return false;
+      }
+      if (recvAction == ActionType.STATE_REQ && msg.getSrc() != cId) {
+        config.logger.log(Level.INFO, "Waiting for " + expAction.name()
+                + " from : " + cId + " Revceived: " + msg.getSrc());
+        return false;
+      } else if (recvAction == ActionType.DECISION) {
+        StateType decision = StateType.valueOf(msg.getAction().getValue());
+        if (decision != StateType.COMMITED) {
+          // This will always be COMMIT because we never wait for
+          // Coordinator to send Abort Decision in the protocol.
+          config.logger.log(Level.SEVERE, "Waiting for " + expAction.name()
+                  + " from : " + cId + " Revceived: " + msg.getSrc());
+          return false;
+        }
+      } else if (recvAction == ActionType.PRE_COMMIT) {
+        // Received PRE_COMMIT.
+        response.setAction(new Action(recvAction, StateType.COMMITABLE.name()));
+        config.logger.log(Level.INFO,
+                "Received PreCommit from Coordinator:" + cId);
+      }
+      // Received expected action.
+      msg = commonQueue.remove();
+      config.logger.log(Level.INFO,
+              "Received " + expAction.name() + "from Coordinator");
+      return true;
+    }
+  }
+
+  private boolean[] getUpset() {
+    synchronized (state) {
+      return state.getUpset();
+    }
   }
 
   public Transaction getTransaction() {
@@ -572,11 +1065,34 @@ public class Process {
   }
 
   /**
-   * Write the decision to DT Log and update the state.
+   * Record the decision and update the state if decision is commit.
    */
   private void recordDecision(StateType st) {
-    // Log decision to DT log.
-    state.setType(st);
+    synchronized (state) {
+      state.setType(st);
+      if (st == StateType.COMMITED) {
+        updatePlaylist();
+      }
+      config.logger.log(Level.INFO,
+              "Reached Decision : " + st.name() + " for current transaction.");
+      config.logger.log(Level.INFO, "Updated Playlist:" + playlist.toString());
+      // Notify the controller about the decision.
+      notifyController(type, NotificationType.RECEIVE, ActionType.DECISION,
+              st.name());
+      // Wait for controller's response.
+      Message msg = null;
+      try {
+        if (type == NodeType.COORDINATOR) {
+          msg = coordinatorControllerQueue.take();
+        } else {
+          msg = controllerQueue.take();
+        }
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+        return;
+      }
+      executeInstruction(msg);
+    }
   }
 
   /**
@@ -591,7 +1107,7 @@ public class Process {
       for (int dest = 1; dest < numProcesses; dest++) {
         // Coordinator should not send a decision to its participant thread so
         // decision is not written to DT Log twice.
-        if (dest == pId) {
+        if (dest == pId || !isOperational(dest)) {
           continue;
         }
         msg = new Message(pId, dest, NodeType.COORDINATOR, NodeType.PARTICIPANT,
@@ -602,7 +1118,7 @@ public class Process {
       for (int dest = 1; dest <= steps; dest++) {
         // Coordinator should not send a decision to its participant thread so
         // decision is not written to DT Log twice.
-        if (dest == pId) {
+        if (dest == pId || !isOperational(dest)) {
           // Increment step by 1 as we are ignoring 1
           steps++;
           continue;
@@ -612,6 +1128,26 @@ public class Process {
         nc.sendMsg(dest, msg);
       }
     }
+  }
+
+  private void notifyAndSendDecision(StateType st) {
+    // Notify controller that coordinator is going to send decision.
+    notifyController(NodeType.COORDINATOR, NotificationType.SEND,
+            ActionType.DECISION, st.name());
+    // Wait for controller's response.
+    Message msg = null;
+    try {
+      msg = coordinatorControllerQueue.take();
+    } catch (InterruptedException e) {
+      config.logger.log(Level.SEVERE,
+              "Received Interrupt waiting for controller on SEND DECISION");
+      e.printStackTrace();
+      return;
+    }
+    int steps = msg.getInstr().getPartialSteps();
+    sendDecision(st, steps);
+    executeInstruction(msg);
+    return;
   }
 
   /**
@@ -665,7 +1201,7 @@ public class Process {
     }
     switch (instr.getInstructionType()) {
       case CONTINUE:
-    	config.logger.log(Level.INFO, "Received Continue Instruction");
+        config.logger.log(Level.INFO, "Received Continue Instruction");
         break;
       case KILL:
         config.logger.log(Level.INFO, "Received Kill Instruction");
@@ -687,7 +1223,25 @@ public class Process {
     }
   }
 
-  private synchronized boolean isParticipant() {
+  /**
+   * Return number of operational process as per current value of the upset.
+   * NOTE : Upset should be maintained correctly in case of total failure for
+   * this method to return correct value
+   * 
+   * @return
+   */
+  private int numOperational() {
+    int operational = 0;
+    boolean[] curUpset = getUpset();
+    for (int i = 1; i < curUpset.length; i++) {
+      if (curUpset[i]) {
+        operational++;
+      }
+    }
+    return operational;
+  }
+
+  private boolean isParticipant() {
     if (type == Message.NodeType.COORDINATOR
             || type == Message.NodeType.PARTICIPANT) {
       return true;
@@ -713,20 +1267,40 @@ public class Process {
 
   // TODO Add a aliveSet for this. Upset is not same as alive set.
   private boolean isAlive(int procId) {
-    return state.getUpset()[procId];
+    return getUpset()[procId];
   }
 
-  /** 
-   */
-  public void kill() {
+  private boolean isOperational(int procId) {
+    boolean[] curUpset = state.getUpset();
+    return curUpset[procId];
+  }
 
+  // TODO Figure out if there is a better way to kill than stop.
+  private void killThread(Thread t) {
+    if (t != null) {
+      t.stop();
+    }
+  }
+
+  private void kill() {
+    heartBeat.shutdownTimers();
+    killThread(heartBeat);
+    killThread(coordinator);
+    killThread(participant);
+    killThread(newCoordinator);
+    killThread(newParticipant);
   }
 
   /**
    * 
    */
   public void halt() {
-
+    try {
+      Thread.sleep(60000);
+    } catch (InterruptedException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
   }
 
   /** Will return 0 if called before startTime. */
@@ -756,13 +1330,6 @@ public class Process {
    */
   private int numProcesses;
   private NetController nc;
-  /**
-   * This thread should be started only after startTime in case this process is
-   * started for 1st time so that it won't send heart beats to processes which
-   * are not yet up. Also it should start heartbeat only after reviveTime incase
-   * this process is being revived after failure.
-   */
-  private HeartBeat hb;
   /**
    * State of the process at any particular point of time. This can be modified
    * by different threads spawned by this process in the following scenarios:
@@ -812,14 +1379,14 @@ public class Process {
   /**
    * Different threads which might be spawned by a process during a transaction.
    * All threads except the heartBeat are stopped on reaching a decision.
-   * heartBeat thread of a previous transaction(if it exists) is stopped on 
+   * heartBeat thread of a previous transaction(if it exists) is stopped on
    * receipt of new initTransaction.
    */
   private Thread coordinator;
   private Thread participant;
   private Thread newCoordinator;
   private Thread newParticipant;
-  private Thread heartBeat;
+  private HeartBeat heartBeat;
   /**
    * Config object used for setting up NetController.
    */
@@ -830,9 +1397,21 @@ public class Process {
    */
   private boolean vote;
   /**
+   * Hashmap used by coordinator to store receipt of votes/acks from other
+   * participants. This is used by sendPartialMessage for sending messages to
+   * only those processes which are uncertain (who voted "Yes" for VOTE_REQ or
+   * reported "Uncertain" for STATE_REQ)
+   */
+  private HashMap<Integer, String> received;
+  /**
    * Time in milli sec when this process is started. Should be same for all the
    * processes so that their clock is synchronized.
    * NOTE : If process dies and recovers after that, startTime will remain same.
    */
   private long startTime;
+  
+  /**
+   * DT Log handle for this process.
+   */
+  private DTLog dtLog;
 }

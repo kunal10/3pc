@@ -7,6 +7,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.logging.Level;
+
 import dc.State.StateType;
 import ut.distcomp.framework.Config;
 
@@ -167,12 +169,15 @@ public class DTLog {
         } else if (line.startsWith("Vote")) {
           rs.vote = line.split(":")[1];
           config.logger.info("Vote DT : " + rs.toString());
-          line = br.readLine();
+        } else {
+          config.logger.log(Level.SEVERE,
+                  "Couldn't parse " + line + " in DT Log");
         }
+        line = br.readLine();
       }
     }
     return rs;
   }
-  
+
   private Config config;
 }

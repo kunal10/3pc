@@ -109,16 +109,13 @@ public class Process {
     try {
       recoveredState = dtLog.parseDTLog();
       state = new State(recoveredState.state);
-      playlist = recoveredState.playlist;
+      playlist = new Playlist(recoveredState.playlist);
     } catch (FileNotFoundException e) {
       // TODO Auto-generated catch block
       e.printStackTrace();
     } catch (IOException e) {
       // TODO Auto-generated catch block
       e.printStackTrace();
-    }
-    if (heartBeat != null) {
-      heartBeat.stop();
     }
     heartBeat = new HeartBeat();
     heartBeat.start();
@@ -278,13 +275,13 @@ public class Process {
           // TODO Auto-generated catch block
           e.printStackTrace();
         }
-        config.logger.info("Consumed Heartbeat of "+m.getSrc());
+        // config.logger.info("Consumed Heartbeat of "+m.getSrc());
         // Disable the timer if a timer is running for that process.
         if (exisitingTimers.containsKey(m.getSrc())) {
           exisitingTimers.get(m.getSrc()).cancel();
         }
         // Add a new timer for the process which has sent a heartbeat
-        config.logger.info(pId + " Adding timer for "+m.getSrc());
+        // config.logger.info(pId + " Adding timer for "+m.getSrc());
         addTimerToExistingTimer(m.getSrc());
 
         // If non participant receives a decision from some other process
@@ -497,86 +494,6 @@ public class Process {
    * before receipt of VOTE_REQ).
    */
   class Participant extends Thread {
-/*<<<<<<< HEAD
-    *//**
-     * This inherently assumes that coordinator is fixed when this function is
-     * being executed. This is fine since when a current coordinator dies,
-     * heart beat thread should first stop the process's participant thread
-     * before modifying cId. Otherwise this method will send the message to the
-     * new Coordinator.
-     * 
-     * @param at
-     * @param value
-     *//*
-    private void sendToCoordinator(ActionType at, String value) {
-      Action action = new Action(at, value);
-      Message msg = new Message(pId, cId, NodeType.PARTICIPANT,
-              NodeType.COORDINATOR, action, getCurTime());
-      nc.sendMsg(cId, msg);
-    }
-
-    *//**
-     * Wait for specified message from Coordinator. If it instead gets
-     * a STATE_REQ here, then it waits for heart beat to detect death of
-     * previous coordinator and spawn a new participant thread which will
-     * consume the STATE_REQ.
-     * 
-     * When waiting for VOTE_REQ, if coordinator dies, then heart beat should
-     * not do anything other than updating the upset. As the waitForMessage
-     * does this in this case.
-     * 
-     * NOTE : It does not consume STATE_REQ message if coordinator has died.
-     * 
-     * @return
-     *//*
-    private boolean waitForMessage(ActionType expAction) {
-      while (true) {
-        if (expAction == ActionType.VOTE_REQ) {
-          if (!Process.this.isAlive(cId)) {
-            config.logger.log(Level.INFO, "Detected death of Coordinator: "
-                    + cId + " while waiting for VOTE_REQ");
-            return false;
-          }
-        }
-        // We can't use take here since we could receive a STATE_REQ from a new
-        // coordinator which should be consumed by a new participant thread.
-        if (commonQueue.isEmpty()) {
-          continue;
-        }
-        Message msg = commonQueue.peek();
-        ActionType recvAction = msg.getAction().getType();
-        if (recvAction == ActionType.STATE_REQ) {
-          config.logger.log(Level.INFO, "Waiting for VOTE_REQ. Revceived: "
-                  + msg.toString() + "\n Current Coordinator must have died.");
-          // Wait for heart beat to detect death of current coordinator and
-          // spawn a new participant thread.
-          while (true) {
-          }
-        }
-        // Received Abort from coordinator while waiting for Precommit.
-        if (expAction == ActionType.PRE_COMMIT
-                && recvAction == ActionType.DECISION) {
-          msg = commonQueue.remove();
-          config.logger.log(Level.INFO, "Waiting for " + expAction.name()
-                  + " Revceived: " + msg.toString());
-          return false;
-        }
-        // Received unexpected action.
-        if (recvAction != expAction) {
-          config.logger.log(Level.SEVERE, "Waiting for " + expAction.name()
-                  + " Revceived: " + msg.toString());
-          return false;
-        }
-        // Received expected action.
-        msg = commonQueue.remove();
-        config.logger.log(Level.INFO,
-                "Received " + expAction.name() + "from Coordinator");
-        return true;
-      }
-    }
-
-=======
->>>>>>> 14838d1b5af8c1b4cc558846ebb8df0598d0dd90*/
     public void run() {
       Message msg = null;
       try {
@@ -644,7 +561,6 @@ public class Process {
           executeInstruction(msg);
           // Write decision to DT Log.
           recordDecision(StateType.ABORTED);
-          config.logger.info("Received Abort for the transaction. Aborting.");
           return;
         }
 
@@ -713,7 +629,6 @@ public class Process {
         synchronized (state) {
           st = state.getType();
         }
-        dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
         // Notify the controller about send of STATE_RES.
         config.logger.log(Level.INFO,
                 "Notifying controller that I am abt to send STATE_RES");
@@ -789,7 +704,6 @@ public class Process {
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
-      dtLog.writeEndTransaction();
     }
   }
 
@@ -1050,7 +964,6 @@ public class Process {
       dtLog.writeDecision(st.toString(), recoveredState.writtenPlaylistInTransaction);
       dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
       dtLog.writePlaylist(playlist, recoveredState.writtenPlaylistInTransaction);
-      dtLog.writeEndTransaction();
       recoveredState.writtenPlaylistInTransaction = true;
       config.logger.log(Level.INFO,
               "Reached Decision : " + st.name() + " for current transaction.");
@@ -1071,6 +984,7 @@ public class Process {
         return;
       }
       executeInstruction(msg);
+      dtLog.writeEndTransaction();
     }
   }
 

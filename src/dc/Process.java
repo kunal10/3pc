@@ -149,16 +149,17 @@ public class Process {
     TimerTask tt;
 
     boolean[] upsetIntersection;
-    // Set<Integer> participants;
+    boolean[] receivedNpMsg;
 
     public HeartBeat() {
       exisitingTimers = new HashMap<>();
       timer = new Timer();
       upsetIntersection = new boolean[numProcesses];
-      // participants = new HashSet<Integer>();
+      receivedNpMsg = new boolean[numProcesses];
       boolean[] curUpset = getUpset();
       for (int i = 1; i < numProcesses; i++) {
         upsetIntersection[i] = curUpset[i];
+        receivedNpMsg[i] = false;
         // if (curUpset[i]) {
         // participants.add(i);
         // }
@@ -225,22 +226,6 @@ public class Process {
         return nextCoord;
       }
 
-      private void spawnNewThread() {
-        if (cId == pId) {
-          config.logger.log(Level.INFO,
-                  "Spawning New Coordinator Thread for: " + pId);
-          type = NodeType.COORDINATOR;
-          newCoordinator = new NewCoordinator();
-          newCoordinator.start();
-        } else {
-          config.logger.log(Level.INFO,
-                  "Spawning New Participant Thread for: " + pId);
-          type = NodeType.PARTICIPANT;
-          newParticipant = new NewParticipant();
-          newParticipant.start();
-        }
-      }
-
       private void handleDeath() {
         synchronized (state) {
           if (isParticipant()) {
@@ -294,11 +279,29 @@ public class Process {
       timer.schedule(tti, delay);
     }
 
+    private void updateReceivedNpMsg(Message m) {
+      if (m.getSrcType() == NodeType.NON_PARTICIPANT) {
+        receivedNpMsg[m.getSrc()] = true;
+      }
+    }
+    
     private void updateUpsetIntersection(Message m) {
       boolean[] upset = m.getState().getUpset();
       for (int i = 1; i < upset.length; i++) {
         upsetIntersection[i] = upsetIntersection[i] && upset[i];
       }
+    }
+    
+    private boolean isLastProcess() {
+      for (int i = 1; i < numProcesses; i++) {
+        if (i == pId) {
+          continue;
+        }
+        if (upsetIntersection[i] && !receivedNpMsg[i]) {
+          return false;
+        }
+      }
+      return upsetIntersection[pId]; 
     }
 
     private boolean lastProcessesRecovered() {
@@ -318,7 +321,23 @@ public class Process {
       }
       return -1;
     }
-
+    
+    private void spawnNewThread() {
+      if (cId == pId) {
+        config.logger.log(Level.INFO,
+                "Spawning New Coordinator Thread for: " + pId);
+        type = NodeType.COORDINATOR;
+        newCoordinator = new NewCoordinator();
+        newCoordinator.start();
+      } else {
+        config.logger.log(Level.INFO,
+                "Spawning New Participant Thread for: " + pId);
+        type = NodeType.PARTICIPANT;
+        newParticipant = new NewParticipant();
+        newParticipant.start();
+      }
+    }
+    
     /**
      * Process heart beats of other processes.
      * TODO :
@@ -343,6 +362,7 @@ public class Process {
         // Add a new timer for the process which has sent a heartbeat
         // config.logger.info(pId + " Adding timer for "+m.getSrc());
         addTimerToExistingTimer(m.getSrc());
+        updateReceivedNpMsg(m);
         updateUpsetIntersection(m);
         // If non participant receives a decision from some other process
         // then it records it, notifies the controller.
@@ -352,23 +372,15 @@ public class Process {
             recordDecision(s.getType());
             // Return since we don't need to process any more messages.
             return;
-          } else if (upsetIntersection[pId] && lastProcessesRecovered()) {
+          } else if (isLastProcess() && lastProcessesRecovered()) {
             cId = findNewCid();
             if (cId == -1) {
               config.logger.log(Level.SEVERE,
                       "upsetIntersection changed while finding new cid after"
                               + "total failure");
             }
-            if (pId == cId) {
-              type = Message.NodeType.COORDINATOR;
-              newCoordinator = new NewCoordinator();
-              newCoordinator.start();
-            } else {
-              type = Message.NodeType.PARTICIPANT;
-              newParticipant = new NewParticipant();
-              newParticipant.start();
-            }
             state.setUpset(upsetIntersection);
+            spawnThread();
           }
         }
       }

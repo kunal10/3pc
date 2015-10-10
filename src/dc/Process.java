@@ -3,6 +3,8 @@ package dc;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.BlockingQueue;
@@ -91,10 +93,10 @@ public class Process {
       this.type = Message.NodeType.COORDINATOR;
       coordinator = new Coordinator();
       coordinator.start();
-    } else{
-    this.type = Message.NodeType.PARTICIPANT;
-    participant = new Participant();
-    participant.start();
+    } else {
+      this.type = Message.NodeType.PARTICIPANT;
+      participant = new Participant();
+      participant.start();
     }
     if (heartBeat != null) {
       heartBeat.stop();
@@ -102,9 +104,9 @@ public class Process {
     heartBeat = new HeartBeat();
     heartBeat.start();
   }
-  
-  public void reviveProcessState(Transaction t, boolean vote){
-    config.logger.info("Reviveing process "+pId);
+
+  public void reviveProcessState(Transaction t, boolean vote) {
+    config.logger.info("Reviveing process " + pId);
     this.transaction = t;
     this.vote = vote;
     this.type = Message.NodeType.NON_PARTICIPANT;
@@ -147,10 +149,20 @@ public class Process {
     TimerTask tt;
 
     boolean[] upsetIntersection;
+    // Set<Integer> participants;
 
     public HeartBeat() {
       exisitingTimers = new HashMap<>();
       timer = new Timer();
+      upsetIntersection = new boolean[numProcesses];
+      // participants = new HashSet<Integer>();
+      boolean[] curUpset = getUpset();
+      for (int i = 1; i < numProcesses; i++) {
+        upsetIntersection[i] = curUpset[i];
+        // if (curUpset[i]) {
+        // participants.add(i);
+        // }
+      }
     }
 
     /**
@@ -164,64 +176,82 @@ public class Process {
 
     // TODO: update the alive set
     class ProcessKillOnTimeoutTask extends TimerTask {
-      int processToRemoveFromUpSet;
+      int killedProcess;
 
       public ProcessKillOnTimeoutTask(int i) {
-        processToRemoveFromUpSet = i;
+        killedProcess = i;
       }
 
       public void run() {
-        config.logger.info("Detected death of " + processToRemoveFromUpSet);
-        exisitingTimers.remove(processToRemoveFromUpSet);
-        state.removeProcessFromUpset(processToRemoveFromUpSet);
-        state.removeProcessFromAlive(processToRemoveFromUpSet);
-        config.logger.log(Level.INFO, "Current cId " + cId);
-        if (processToRemoveFromUpSet == cId) {
-          config.logger.log(Level.INFO, "Detected death of Coord");
-          if (participant != null) {
-            try {
-              participant.join();
-              config.logger.log(Level.INFO, "Participant Thread: " + pId
-                      + "returned on death of new Coordinator");
-              participant = null;
-            } catch (InterruptedException e) {
-              // TODO Auto-generated catch block
-              e.printStackTrace();
-            }
+        config.logger.info("Detected death of " + killedProcess);
+        state.removeProcessFromAlive(killedProcess);
+        exisitingTimers.remove(killedProcess);
+        handleDeath();
+      }
+
+      private void waitForThreads() {
+        if (participant != null) {
+          try {
+            participant.join();
+            config.logger.log(Level.INFO, "Participant Thread: " + pId
+                    + "returned on death of new Coordinator");
+            participant = null;
+          } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
           }
-          if (newParticipant != null) {
-            try {
-              newParticipant.join();
-              config.logger.log(Level.INFO, "New Participant Thread: " + pId
-                      + "returned on death of new Coordinator");
-            } catch (InterruptedException e) {
-              // TODO Auto-generated catch block
-              e.printStackTrace();
-            }
+        }
+        if (newParticipant != null) {
+          try {
+            newParticipant.join();
+            config.logger.log(Level.INFO, "New Participant Thread: " + pId
+                    + "returned on death of new Coordinator");
+          } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
           }
-          boolean[] curUpset = getUpset();
-          int minAliveParticipant = pId;
-          for (int i = 1; i < numProcesses; i++) {
-            if (curUpset[i]) {
-              minAliveParticipant = i;
-              break;
-            }
+        }
+      }
+
+      int findNextCoordinator() {
+        boolean[] curUpset = getUpset();
+        int nextCoord = pId;
+        for (int i = 1; i < numProcesses; i++) {
+          if (curUpset[i]) {
+            nextCoord = i;
+            break;
           }
-          synchronized (state) {
-            cId = minAliveParticipant;
-            config.logger.info("Setting New Cid : "+cId);
-            if (cId == pId) {
-              config.logger.log(Level.INFO,
-                      "Spawning New Coordinator Thread for: " + pId);
-              newCoordinator = new NewCoordinator();
-              newCoordinator.start();
-              type = NodeType.COORDINATOR;
-            } else {
-              config.logger.log(Level.INFO,
-                      "Spawning New Participant Thread for: " + pId);
-              newParticipant = new NewParticipant();
-              newParticipant.start();
-              type = NodeType.PARTICIPANT;
+        }
+        return nextCoord;
+      }
+
+      private void spawnNewThread() {
+        if (cId == pId) {
+          config.logger.log(Level.INFO,
+                  "Spawning New Coordinator Thread for: " + pId);
+          type = NodeType.COORDINATOR;
+          newCoordinator = new NewCoordinator();
+          newCoordinator.start();
+        } else {
+          config.logger.log(Level.INFO,
+                  "Spawning New Participant Thread for: " + pId);
+          type = NodeType.PARTICIPANT;
+          newParticipant = new NewParticipant();
+          newParticipant.start();
+        }
+      }
+
+      private void handleDeath() {
+        synchronized (state) {
+          if (isParticipant()) {
+            state.removeProcessFromUpset(killedProcess);
+            config.logger.log(Level.INFO, "Current cId " + cId);
+            if (killedProcess == cId) {
+              config.logger.log(Level.INFO, "Detected death of Coord");
+              waitForThreads();
+              cId = findNextCoordinator();
+              config.logger.info("Setting New Cid : " + cId);
+              spawnNewThread();
             }
           }
         }
@@ -251,7 +281,8 @@ public class Process {
           }
         }
       } catch (Exception e) {
-        config.logger.info("Exception in Sending heartbeat from "+pId + " "+e.getMessage());
+        config.logger.info("Exception in Sending heartbeat from " + pId + " "
+                + e.getMessage());
         e.printStackTrace();
       }
     }
@@ -321,25 +352,23 @@ public class Process {
             recordDecision(s.getType());
             // Return since we don't need to process any more messages.
             return;
-          } else {
-            if (upsetIntersection[pId] && lastProcessesRecovered()) {
-              cId = findNewCid();
-              if (cId == -1) {
-                config.logger.log(Level.SEVERE,
-                        "upsetIntersection changed while finding new cid after"
-                                + "total failure");
-              }
-              if (pId == cId) {
-                type = Message.NodeType.COORDINATOR;
-                newCoordinator = new NewCoordinator();
-                newCoordinator.start();
-              } else {
-                type = Message.NodeType.PARTICIPANT;
-                newParticipant = new NewParticipant();
-                newParticipant.start();
-              }
-              state.setUpset(upsetIntersection);
+          } else if (upsetIntersection[pId] && lastProcessesRecovered()) {
+            cId = findNewCid();
+            if (cId == -1) {
+              config.logger.log(Level.SEVERE,
+                      "upsetIntersection changed while finding new cid after"
+                              + "total failure");
             }
+            if (pId == cId) {
+              type = Message.NodeType.COORDINATOR;
+              newCoordinator = new NewCoordinator();
+              newCoordinator.start();
+            } else {
+              type = Message.NodeType.PARTICIPANT;
+              newParticipant = new NewParticipant();
+              newParticipant.start();
+            }
+            state.setUpset(upsetIntersection);
           }
         }
       }
@@ -379,8 +408,7 @@ public class Process {
         // of other processes.
         if (!state.isTerminalState()) {
           processHeartBeat();
-        }
-        else{
+        } else {
           for (Integer key : exisitingTimers.keySet()) {
             exisitingTimers.get(key).cancel();
           }
@@ -399,7 +427,8 @@ public class Process {
       Message msg = null;
       int steps = -1;
       try {
-        dtLog.writeStartTransaction(recoveredState.writtenPlaylistInTransaction);
+        dtLog.writeStartTransaction(
+                recoveredState.writtenPlaylistInTransaction);
         // Notify controller about starting of 3PC.
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
                 ActionType.START, "");
@@ -505,7 +534,7 @@ public class Process {
           notifyAndSendDecision(reportedSt);
         } else {
           // Some processes reported committable state.
-
+          reportedSt = StateType.COMMITABLE;
           // Update state to commitable.
           synchronized (state) {
             state.setType(StateType.COMMITABLE);
@@ -526,7 +555,7 @@ public class Process {
           // Write Decision in DT Log.
           recordDecision(StateType.COMMITED);
           // Notify controller and send the decision.
-          notifyAndSendDecision(reportedSt);
+          notifyAndSendDecision(StateType.COMMITED);
         }
       } catch (InterruptedException e) {
         e.printStackTrace();
@@ -545,7 +574,8 @@ public class Process {
     public void run() {
       Message msg = null;
       try {
-        dtLog.writeStartTransaction(recoveredState.writtenPlaylistInTransaction);
+        dtLog.writeStartTransaction(
+                recoveredState.writtenPlaylistInTransaction);
         // Notify controller about starting of 3PC.
         notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
                 ActionType.START, "");
@@ -1014,9 +1044,11 @@ public class Process {
       if (st == StateType.COMMITED) {
         updatePlaylist();
       }
-      dtLog.writeDecision(st.toString(), recoveredState.writtenPlaylistInTransaction);
+      dtLog.writeDecision(st.toString(),
+              recoveredState.writtenPlaylistInTransaction);
       dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
-      dtLog.writePlaylist(playlist, recoveredState.writtenPlaylistInTransaction);
+      dtLog.writePlaylist(playlist,
+              recoveredState.writtenPlaylistInTransaction);
       recoveredState.writtenPlaylistInTransaction = true;
       config.logger.log(Level.INFO,
               "Reached Decision : " + st.name() + " for current transaction.");
@@ -1181,8 +1213,10 @@ public class Process {
     return getAlive()[procId];
   }
 
+  // NOTE: This should be used only by operational processes (Ones invloved in
+  // the protocol)
   private boolean isOperational(int procId) {
-    return getUpset()[procId];
+    return (getUpset()[procId] && isAlive(procId));
   }
 
   // TODO Figure out if there is a better way to kill than stop.
@@ -1200,7 +1234,7 @@ public class Process {
     killThread(participant);
     killThread(newCoordinator);
     killThread(newParticipant);
-    
+
   }
 
   /**
@@ -1326,9 +1360,9 @@ public class Process {
    * DT Log handle for this process.
    */
   private DTLog dtLog;
-  
+
   /**
-   * Storing the recovered state from DTLog. 
+   * Storing the recovered state from DTLog.
    */
-  private RecoveredState recoveredState; 
+  private RecoveredState recoveredState;
 }

@@ -107,6 +107,7 @@ public class Process {
 
   public void reviveProcessState(Transaction t, boolean vote) {
     config.logger.info("Reviveing process " + pId);
+    this.cId = -1;
     this.transaction = t;
     this.vote = vote;
     this.type = Message.NodeType.NON_PARTICIPANT;
@@ -122,6 +123,7 @@ public class Process {
       e.printStackTrace();
     }
     heartBeat = new HeartBeat();
+    config.logger.info("Restarting heartbeat after recovery");
     heartBeat.start();
   }
 
@@ -160,9 +162,6 @@ public class Process {
       for (int i = 1; i < numProcesses; i++) {
         upsetIntersection[i] = curUpset[i];
         receivedNpMsg[i] = false;
-        // if (curUpset[i]) {
-        // participants.add(i);
-        // }
       }
     }
 
@@ -195,7 +194,7 @@ public class Process {
           try {
             participant.join();
             config.logger.log(Level.INFO, "Participant Thread: " + pId
-                    + "returned on death of new Coordinator");
+                    + "returned on death of Coordinator");
             participant = null;
           } catch (InterruptedException e) {
             // TODO Auto-generated catch block
@@ -227,17 +226,21 @@ public class Process {
       }
 
       private void handleDeath() {
-        synchronized (state) {
-          if (isParticipant()) {
+        if (isParticipant()) {
+          config.logger.log(Level.INFO, "Current cId " + cId);
+          config.logger.log(Level.INFO,
+                  "Removing " + killedProcess + "from upset");
+          synchronized (state) {
             state.removeProcessFromUpset(killedProcess);
-            config.logger.log(Level.INFO, "Current cId " + cId);
-            if (killedProcess == cId) {
-              config.logger.log(Level.INFO, "Detected death of Coord");
-              waitForThreads();
-              cId = findNextCoordinator();
-              config.logger.info("Setting New Cid : " + cId);
-              spawnNewThread();
-            }
+          }
+          config.logger.log(Level.INFO,
+                  "Upset[killedProcess]" + state.getUpset()[killedProcess]);
+          if (killedProcess == cId) {
+            config.logger.log(Level.INFO, "Detected death of Coord");
+            waitForThreads();
+            cId = findNextCoordinator();
+            config.logger.info("Setting New Cid : " + cId);
+            spawnNewThread();
           }
         }
       }
@@ -245,23 +248,26 @@ public class Process {
 
     public void sendHeartBeat() {
       try {
-        synchronized (type) {
-          Message.NodeType srcType = Message.NodeType.NON_PARTICIPANT;
-          if (isParticipant()) {
-            srcType = Message.NodeType.PARTICIPANT;
+        Message.NodeType srcType = Message.NodeType.NON_PARTICIPANT;
+        if (isParticipant()) {
+          srcType = Message.NodeType.PARTICIPANT;
+        }
+        long curTime = getCurTime();
+        // Loop starts from 1 since we don't need to send the heart beat to
+        // the controller.
+        for (int dest = 1; dest < numProcesses; dest++) {
+          if (dest == pId) {
+            continue;
           }
-          long curTime = getCurTime();
-          // Loop starts from 1 since we don't need to send the heart beat to
-          // the controller.
-          for (int dest = 1; dest < numProcesses; dest++) {
-            Message m = null;
-            if (state.getUpset()[dest]) {
-              m = new Message(pId, dest, srcType, Message.NodeType.PARTICIPANT,
-                      state, curTime);
+          Message m = null;
+          if (Process.this.isAlive(dest)) {
+            NodeType destType;
+            if (getUpset()[dest]) {
+              destType = NodeType.PARTICIPANT;
             } else {
-              m = new Message(pId, dest, srcType,
-                      Message.NodeType.NON_PARTICIPANT, state, curTime);
+              destType = NodeType.NON_PARTICIPANT;
             }
+            m = new Message(pId, dest, srcType, destType, state, curTime);
             nc.sendMsg(dest, m);
           }
         }
@@ -273,7 +279,7 @@ public class Process {
     }
 
     private void addTimerToExistingTimer(int i) {
-      int delay = 1100;
+      int delay = 2000;
       TimerTask tti = new ProcessKillOnTimeoutTask(i);
       exisitingTimers.put(i, tti);
       timer.schedule(tti, delay);
@@ -281,17 +287,18 @@ public class Process {
 
     private void updateReceivedNpMsg(Message m) {
       if (m.getSrcType() == NodeType.NON_PARTICIPANT) {
+        config.logger.info("Received Np msg from: " + m.getSrc());
         receivedNpMsg[m.getSrc()] = true;
       }
     }
-    
+
     private void updateUpsetIntersection(Message m) {
       boolean[] upset = m.getState().getUpset();
       for (int i = 1; i < upset.length; i++) {
         upsetIntersection[i] = upsetIntersection[i] && upset[i];
       }
     }
-    
+
     private boolean isLastProcess() {
       for (int i = 1; i < numProcesses; i++) {
         if (i == pId) {
@@ -301,7 +308,7 @@ public class Process {
           return false;
         }
       }
-      return upsetIntersection[pId]; 
+      return upsetIntersection[pId];
     }
 
     private boolean lastProcessesRecovered() {
@@ -321,9 +328,8 @@ public class Process {
       }
       return -1;
     }
-    
+
     private void spawnNewThread() {
-      state.setUpset(upsetIntersection);
       if (cId == pId) {
         config.logger.log(Level.INFO,
                 "Spawning New Coordinator Thread for: " + pId);
@@ -338,7 +344,7 @@ public class Process {
         newParticipant.start();
       }
     }
-    
+
     /**
      * Process heart beats of other processes.
      * TODO :
@@ -348,40 +354,52 @@ public class Process {
      * processes.
      */
     public void processHeartBeat() {
+      int logFreq = 100;
+      int count = 0;
       while (true) {
-        Message m = null;
-        try {
-          m = heartbeatQueue.take();
-        } catch (InterruptedException e) {
-          // TODO Auto-generated catch block
-          e.printStackTrace();
-        }
-        // Disable the timer if a timer is running for that process.
-        if (exisitingTimers.containsKey(m.getSrc())) {
-          exisitingTimers.get(m.getSrc()).cancel();
-        }
-        // Add a new timer for the process which has sent a heartbeat
-        // config.logger.info(pId + " Adding timer for "+m.getSrc());
-        addTimerToExistingTimer(m.getSrc());
-        updateReceivedNpMsg(m);
-        updateUpsetIntersection(m);
-        // If non participant receives a decision from some other process
-        // then it records it, notifies the controller.
-        if (!isParticipant()) {
-          dc.State s = m.getState();
-          if (s.isTerminalState()) {
-            recordDecision(s.getType());
-            // Return since we don't need to process any more messages.
-            return;
-          } else if (isLastProcess() && lastProcessesRecovered()) {
-            cId = findNewCid();
-            if (cId == -1) {
-              config.logger.log(Level.SEVERE,
-                      "upsetIntersection changed while finding new cid after"
-                              + "total failure");
-            }
-            spawnNewThread();
+        count++;
+        if (count == 0) {
+          for (int i = 1; i < numProcesses; i++) {
+            config.logger.info("Process i: alive = " + Process.this.isAlive(i)
+                    + " upsetIntersection = " + upsetIntersection[i]);
           }
+        }
+        count = count % logFreq;
+        if (!heartbeatQueue.isEmpty()) {
+          Message m = heartbeatQueue.remove();
+          // Disable the timer if a timer is running for that process.
+          if (exisitingTimers.containsKey(m.getSrc())) {
+            exisitingTimers.get(m.getSrc()).cancel();
+          }
+          // Add a new timer for the process which has sent a heartbeat
+          // config.logger.info(pId + " Adding timer for "+m.getSrc());
+          addTimerToExistingTimer(m.getSrc());
+          synchronized (state) {
+            state.addProcessToAlive(m.getSrc());
+          }
+          updateReceivedNpMsg(m);
+          updateUpsetIntersection(m);
+          // If non participant receives a decision from some other process
+          // then it records it, notifies the controller.
+          if (!isParticipant()) {
+            dc.State s = m.getState();
+            if (s.isTerminalState()) {
+              recordDecision(s.getType());
+              // Return since we don't need to process any more messages.
+              return;
+            }
+          }
+        }
+        if (!isParticipant() && isLastProcess()) {
+          cId = findNewCid();
+          config.logger.log(Level.INFO,
+                  "Detected total failure.. Setting new cid to: " + cId);
+          if (cId == -1) {
+            config.logger.log(Level.SEVERE,
+                    "upsetIntersection changed while finding new cid after"
+                            + "total failure");
+          }
+          spawnNewThread();
         }
       }
     }
@@ -410,7 +428,7 @@ public class Process {
 
       // Initialize all the timers to track heartbeat of other processes.
       for (int i = 1; i < numProcesses; i++) {
-        if (i != pId) {
+        if (i != pId && dc.Process.this.isAlive(i)) {
           addTimerToExistingTimer(i);
         }
       }
@@ -811,11 +829,18 @@ public class Process {
       steps = curUpset.length;
     }
     for (int i = 1; steps > 0 && i < curUpset.length; i++) {
-      if (i == pId || !curUpset[i] || !received.containsKey(i)) {
+      if (i == pId || !curUpset[i]) {
+        config.logger.log(Level.INFO,
+                "Not sending " + at.name() + " to process: " + i);
         // Don't send the message to the following :
         // 1. Itself
         // 2. Non-operational processes
-        // 3. Processes who are not uncertain.
+        continue;
+      }
+      if (!received.containsKey(i) && at != ActionType.VOTE_REQ
+              && at != ActionType.STATE_REQ) {
+        // Processes who are not uncertain(i.e. voted no or didn't send ACK)
+        continue;
       }
       msg = new Message(pId, i, NodeType.COORDINATOR, NodeType.PARTICIPANT,
               action, getCurTime());
@@ -991,7 +1016,7 @@ public class Process {
       if (recvAction != expAction) {
         if (recvAction == ActionType.STATE_REQ) {
           config.logger.log(Level.INFO, "Waiting for " + expAction.name()
-                  + " from : " + cId + " Revceived: " + msg.getSrc());
+                  + " from : " + cId + " Revceived: " + msg.toString());
           return false;
         } else if (expAction == ActionType.PRE_COMMIT
                 && recvAction == ActionType.DECISION) {
@@ -1051,38 +1076,41 @@ public class Process {
    * Record the decision and update the state if decision is commit.
    */
   private void recordDecision(StateType st) {
-    synchronized (state) {
-      state.setType(st);
-      if (st == StateType.COMMITED) {
-        updatePlaylist();
-      }
-      dtLog.writeDecision(st.toString(),
-              recoveredState.writtenPlaylistInTransaction);
-      dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
-      dtLog.writePlaylist(playlist,
-              recoveredState.writtenPlaylistInTransaction);
-      recoveredState.writtenPlaylistInTransaction = true;
-      config.logger.log(Level.INFO,
-              "Reached Decision : " + st.name() + " for current transaction.");
-      config.logger.log(Level.INFO, "Updated Playlist:" + playlist.toString());
-      // Notify the controller about the decision.
-      notifyController(type, NotificationType.RECEIVE, ActionType.DECISION,
-              st.name());
-      // Wait for controller's response.
-      Message msg = null;
-      try {
-        if (type == NodeType.COORDINATOR) {
-          msg = coordinatorControllerQueue.take();
-        } else {
-          msg = controllerQueue.take();
-        }
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-        return;
-      }
-      executeInstruction(msg);
-      dtLog.writeEndTransaction();
+    config.logger.info("INSIDE RECORD DECISION");
+    // synchronized (state) {
+    state.setType(st);
+    if (st == StateType.COMMITED) {
+      updatePlaylist();
     }
+    dtLog.writeDecision(st.toString(),
+            recoveredState.writtenPlaylistInTransaction);
+    dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
+    dtLog.writePlaylist(playlist, recoveredState.writtenPlaylistInTransaction);
+    recoveredState.writtenPlaylistInTransaction = true;
+    config.logger.log(Level.INFO,
+            "Reached Decision : " + st.name() + " for current transaction.");
+    config.logger.log(Level.INFO, "Updated Playlist:" + playlist.toString());
+    // Notify the controller about the decision.
+    notifyController(type, NotificationType.RECEIVE, ActionType.DECISION,
+            st.name());
+    // Wait for controller's response.
+    Message msg = null;
+    try {
+      if (type == NodeType.COORDINATOR) {
+        config.logger.info("Waiting as Coordinator");
+        msg = coordinatorControllerQueue.take();
+      } else {
+        config.logger.info("Waiting as Participant");
+        msg = controllerQueue.take();
+      }
+      config.logger.info("Received msg from Controller" + msg.toString());
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      return;
+    }
+    executeInstruction(msg);
+    dtLog.writeEndTransaction();
+    // }
   }
 
   /**
@@ -1228,7 +1256,7 @@ public class Process {
   // NOTE: This should be used only by operational processes (Ones invloved in
   // the protocol)
   private boolean isOperational(int procId) {
-    return (getUpset()[procId] && isAlive(procId));
+    return (getUpset()[procId]);
   }
 
   // TODO Figure out if there is a better way to kill than stop.
@@ -1246,7 +1274,6 @@ public class Process {
     killThread(participant);
     killThread(newCoordinator);
     killThread(newParticipant);
-
   }
 
   /**

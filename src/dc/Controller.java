@@ -284,41 +284,43 @@ public class Controller {
       m.setInstr(i);
       nc.sendMsg(m.getDest(), m);
       config.logger.info("Detected halt");
-      
-      /*for (int i1 = 1; i1 < config.numProcesses; i1++) {
-        m.setDest(i1);
-        m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
-        nc.sendMsg(i1, m);
-        config.logger.info("HALT Sent " + m.toString() + " to " + i1);
-        if (i1 == currentCoordinatorId) {
-          // Send another message to the coordinator
-          m.setDestType(NodeType.COORDINATOR);
-          nc.sendMsg(i1, m);
-          config.logger.info("HALT Sent " + m.toString() + " to " + i1);
-        }
-      }
-      try {
-        Thread.sleep(60000);
-      } catch (InterruptedException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-      }
-      // Send resume after some halt.
-      config.logger.info("Sending Resume");
-      i.setInstructionType(InstructionType.RESUME);
-      m.setInstr(i);
-      for (int i1 = 1; i1 < config.numProcesses; i1++) {
-        m.setDest(i1);
-        m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
-        nc.sendMsg(i1, m);
-        config.logger.info("RESUME Sent " + m.toString() + " to " + i1);
-        if (i1 == currentCoordinatorId) {
-          // Send another message to the coordinator
-          m.setDestType(NodeType.COORDINATOR);
-          nc.sendMsg(i1, m);
-          config.logger.info("RESUME Sent " + m.toString() + " to " + i1);
-        }
-      }*/
+
+      /*
+       * for (int i1 = 1; i1 < config.numProcesses; i1++) {
+       * m.setDest(i1);
+       * m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
+       * nc.sendMsg(i1, m);
+       * config.logger.info("HALT Sent " + m.toString() + " to " + i1);
+       * if (i1 == currentCoordinatorId) {
+       * // Send another message to the coordinator
+       * m.setDestType(NodeType.COORDINATOR);
+       * nc.sendMsg(i1, m);
+       * config.logger.info("HALT Sent " + m.toString() + " to " + i1);
+       * }
+       * }
+       * try {
+       * Thread.sleep(60000);
+       * } catch (InterruptedException e) {
+       * // TODO Auto-generated catch block
+       * e.printStackTrace();
+       * }
+       * // Send resume after some halt.
+       * config.logger.info("Sending Resume");
+       * i.setInstructionType(InstructionType.RESUME);
+       * m.setInstr(i);
+       * for (int i1 = 1; i1 < config.numProcesses; i1++) {
+       * m.setDest(i1);
+       * m.setDestType(NodeType.PARTICIPANT); // Dummy Value doesn't matter
+       * nc.sendMsg(i1, m);
+       * config.logger.info("RESUME Sent " + m.toString() + " to " + i1);
+       * if (i1 == currentCoordinatorId) {
+       * // Send another message to the coordinator
+       * m.setDestType(NodeType.COORDINATOR);
+       * nc.sendMsg(i1, m);
+       * config.logger.info("RESUME Sent " + m.toString() + " to " + i1);
+       * }
+       * }
+       */
     }
 
     /**
@@ -361,19 +363,22 @@ public class Controller {
        * NodeType.PARTICIPANT, System.currentTimeMillis());
        * sendMessageToCoordinatorAndParticipant(startMessage);
        */
+      config.logger.info("While entry");
       while (!indiviualInstructionQueue.isEmpty()) {
+        config.logger.info("Inst queue for"+procNum);
         Instruction currentInstruction = indiviualInstructionQueue.peek();
         currentInstructionSeqNum = indiviualInstructionQueue.peek().getSeqNo();
         if (checkIfCurrentInstructionRevive(currentInstruction)) {
           // TODO: Call the revive method on the process
-          config.logger.info("Detected revive instruction "+procNum);
+          config.logger.info("Detected revive instruction " + procNum);
           try {
             Thread.sleep(10000);
           } catch (InterruptedException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
           }
-          processes[procNum] = new Process(procNum, getCurrentTime(), processesConfigs[procNum]);
+          processes[procNum] = new Process(procNum, getCurrentTime(),
+                  processesConfigs[procNum]);
           processes[procNum].reviveProcessState(currentTransaction, vote);
           incrementNextInstructionSequenceNum();
           indiviualInstructionQueue.removeFirst();
@@ -388,7 +393,7 @@ public class Controller {
           // new coordinator then change your Cid.
           checkInstructionAndUpdateCoordinatorId(newMessage);
 
-            if (compareInstructionToMessage(currentInstruction, newMessage)) {
+          if (compareInstructionToMessage(currentInstruction, newMessage)) {
             while (currentInstruction.getSeqNo() != minSeqNumber) {
             }
             config.logger.info("Executing instruction with seq no "
@@ -408,7 +413,7 @@ public class Controller {
         config.logger.info("Cuurent inst being executed by conroller for "
                 + procNum + ": " + currentInstruction.toString() + " Seq No:"
                 + currentInstructionSeqNum);
-        config.logger.info("Remaining instructions for :"+procNum);
+        config.logger.info("Remaining instructions for :" + procNum);
         for (Instruction b : indiviualInstructionQueue) {
           config.logger.info(b.toString());
           config.logger.info("=========================\n");
@@ -418,7 +423,8 @@ public class Controller {
       while (!isTransactionComplete) {
         try {
           Message m = messageQueue[procNum].take();
-          config.logger.info("Checking if decision reached using :"+m.toString());
+          config.logger
+                  .info("Checking if decision reached using :" + m.toString());
           isTransactionComplete = isTransactionComplete(m);
           sendContinueToProcess(m);
         } catch (InterruptedException e) {
@@ -435,7 +441,8 @@ public class Controller {
      */
     private void sendContinueToProcess(Message newMessage) {
       // Only the instruction type matters. All others are dummy values.
-      config.logger.info("Sending continue to message "+newMessage.toString()+ " Proc "+procNum);
+      config.logger.info("Sending continue to message " + newMessage.toString()
+              + " Proc " + procNum);
       newMessage.setInstr(new Instruction(InstructionType.CONTINUE, "",
               NotificationType.DELIVER, ActionType.ACK, -1, procNum, -1));
       // Check
@@ -443,6 +450,7 @@ public class Controller {
       newMessage.setDestType(newMessage.getSrcType());
       newMessage.setSrc(0);
       newMessage.setSrcType(NodeType.CONTROLLER);
+      newMessage.setState(null);
       nc.sendMsg(procNum, newMessage);
       config.logger.info(
               "CONTINUE Sent " + newMessage.toString() + " to " + procNum);
@@ -469,7 +477,8 @@ public class Controller {
      * Check if a process has sent a decision message.
      * Use this in deciding whether you have to finish this transaction.
      * TODO: Add logic for coordinator. Match on notification type as well.
-     * For coordinator its SEND. All others its RECEIVE. 
+     * For coordinator its SEND. All others its RECEIVE.
+     * 
      * @param m
      * @return
      */
@@ -485,9 +494,10 @@ public class Controller {
           config.logger.info("Process " + procNum + " has decided "
                   + m.getAction().getType());
         }
+      } else {
+        config.logger.info("Process " + procNum + " has not decided "
+                + m.getAction().getType());
       }
-      config.logger.info("Process " + procNum + " has not decided "
-              + m.getAction().getType());
       return complete;
     }
 

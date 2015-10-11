@@ -111,8 +111,9 @@ public class NetController {
 	 */
 	public synchronized boolean sendMsg(int process, Message msg) {
 		try {
-			if (outSockets[process] == null)
+			if (outSockets[process] == null) {
 				initOutgoingConn(process);
+			}
 			outSockets[process].sendMsg(msg);
 			//config.logger.info("Sent "+msg.toString()+" to "+process);
 			if(!msg.isHeartbeatMessage()){

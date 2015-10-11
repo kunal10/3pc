@@ -54,7 +54,11 @@ public class State implements Serializable {
   public void removeProcessFromAlive(int i) {
     alive[i] = false;
   }
-
+  
+  public void addProcessToAlive(int i) {
+    alive[i] = true;
+  }
+  
   @Override
   public String toString() {
     String stateType = type.toString() + "#";
@@ -81,7 +85,10 @@ public class State implements Serializable {
       boolean[] aliveSet = new boolean[size];
       for (int i = 0; i < size; i++) {
         createdUpset[i] = upset.get(i).booleanValue();
-        aliveSet[i] = false;
+        // This should be set for all processes so that it sends atleast 1 
+        // heartbeat to every process. If process is not alive then it will be 
+        // detected as dead and aliveSet will be updated appropriately.
+        aliveSet[i] = true;
       }
       parsedState = new State(stateType, createdUpset, aliveSet);
     }
@@ -104,12 +111,16 @@ public class State implements Serializable {
     return (st == StateType.COMMITED || st == StateType.ABORTED);
   }
 
-  private StateType type;
-  private boolean[] upset;
-  private boolean[] alive;
+  private volatile StateType type;
+  private volatile boolean[] upset;
+  private volatile boolean[] alive;
 
   public void setUpset(boolean[] upset) {
     this.upset = Arrays.copyOf(upset, upset.length);
+  }
+  
+  public void setAlive(boolean[] alive) {
+    this.alive = Arrays.copyOf(alive, alive.length);
   }
 
   public static void main(String[] args) {

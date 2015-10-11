@@ -258,16 +258,16 @@ public class Process {
             continue;
           }
           Message m = null;
-          if (Process.this.isAlive(dest)) {
-            NodeType destType;
-            if (getUpset()[dest]) {
-              destType = NodeType.PARTICIPANT;
-            } else {
-              destType = NodeType.NON_PARTICIPANT;
-            }
-            m = new Message(pId, dest, srcType, destType, state, curTime);
-            nc.sendMsg(dest, m);
+          // if (Process.this.isAlive(dest)) {
+          NodeType destType;
+          if (getUpset()[dest]) {
+            destType = NodeType.PARTICIPANT;
+          } else {
+            destType = NodeType.NON_PARTICIPANT;
           }
+          m = new Message(pId, dest, srcType, destType, state, curTime);
+          nc.sendMsg(dest, m);
+          // }
         }
       } catch (Exception e) {
         config.logger.info("Exception in Sending heartbeat from " + pId + " "
@@ -1222,6 +1222,8 @@ public class Process {
    */
   private void notifyController(NodeType srcType, NotificationType nt,
           ActionType at, String value) {
+    config.logger.info(srcType.name() + pId + "Notifying Controller abt : "
+            + nt.name() + " of " + at.name() + " " + value);
     Action action = new Action(at, value);
     Message msg = new Message(pId, 0, srcType, NodeType.CONTROLLER, action,
             getCurTime());

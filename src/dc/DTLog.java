@@ -158,18 +158,27 @@ public class DTLog {
           config.logger.info("Decision DT : " + rs.toString());
         } else if (line.startsWith("State")) {
           try {
-            rs.state = new State(State.parseState(line.split(":")[1]));
+            String[] splits = line.split(":");
+            if (splits.length > 1) {
+              rs.state = new State(State.parseState(splits[1]));
+            }
             config.logger.info("State DT : " + rs.toString());
           } catch (Exception e) {
             config.logger.info("Couldn't parse state");
           }
         } else if (line.startsWith("Playlist")) {
-          rs.playlist = Playlist.parsePlaylist(line.split(":")[1]);
-          rs.writtenPlaylistInTransaction = true;
-          config.logger.info("Playlist DT : " + rs.toString());
+          String[] splits = line.split(":");
+          if (splits.length > 1) {
+            rs.playlist = Playlist.parsePlaylist(splits[1]);
+            rs.writtenPlaylistInTransaction = true;
+            config.logger.info("Playlist DT : " + rs.toString());
+          }
         } else if (line.startsWith("Vote")) {
-          rs.vote = line.split(":")[1];
-          config.logger.info("Vote DT : " + rs.toString());
+          String[] splits = line.split(":");
+          if (splits.length > 1) {
+            rs.vote = splits[1];
+            config.logger.info("Vote DT : " + rs.toString());
+          }
         } else {
           config.logger.log(Level.SEVERE,
                   "Couldn't parse " + line + " in DT Log");

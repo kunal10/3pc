@@ -236,22 +236,6 @@ public class Controller {
     }
 
     /**
-     * Send a message to both participant and coordinator thread of the
-     * current coordinator process.
-     * 
-     * @param m
-     */
-    private void sendMessageToCoordinatorAndParticipant(Message m) {
-      nc.sendMsg(procNum, m);
-      /*
-       * if (procNum == currentCoordinatorId) {
-       * m.setDestType(NodeType.COORDINATOR);
-       * nc.sendMsg(procNum, m);
-       * }
-       */
-    }
-
-    /**
      * Check if the instruction to be executed corresponds to message which you
      * received.
      * Compare the action type and notification type.
@@ -344,6 +328,8 @@ public class Controller {
         m.setSrc(0);
         m.setSrcType(NodeType.CONTROLLER);
         nc.sendMsg(procNum, m);
+        messageQueue[procNum].clear();
+        nc.outSockets[procNum] = null;
         config.logger.info("KILL Sent " + m.toString() + " to " + procNum);
       } else {
         config.logger.log(Level.WARNING, "Can't make out the Instruction type");

@@ -35,7 +35,7 @@ import dc.Message;
 public class NetController {
 	private final Config config;
 	private final IncomingSock[] inSockets;
-	private final OutgoingSock[] outSockets;
+	public OutgoingSock[] outSockets;
 	private final ListenServer listener;
 	private BlockingQueue<Message> commonQueue;
 	private BlockingQueue<Message> controllerQueue;

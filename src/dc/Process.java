@@ -3,8 +3,6 @@ package dc;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.BlockingQueue;
@@ -286,8 +284,10 @@ public class Process {
     }
 
     private void updateReceivedNpMsg(Message m) {
-      if (m.getSrcType() == NodeType.NON_PARTICIPANT) {
-        config.logger.info("Received Np msg from: " + m.getSrc());
+      if (type == NodeType.NON_PARTICIPANT) {
+        if (!receivedNpMsg[m.getSrc()]) {
+          config.logger.info("Received 1st Np msg from : " + m.getSrc());
+        }
         receivedNpMsg[m.getSrc()] = true;
       }
     }
@@ -305,6 +305,9 @@ public class Process {
           continue;
         }
         if (upsetIntersection[i] && !receivedNpMsg[i]) {
+          // config.logger
+          // .info(i + ": UpsetIntersection = " + upsetIntersection[i]);
+          // config.logger.info(i + ": receivedNpMsg = " + receivedNpMsg[i]);
           return false;
         }
       }
@@ -354,21 +357,21 @@ public class Process {
      * processes.
      */
     public void processHeartBeat() {
-      int logFreq = 100;
       int count = 0;
       while (true) {
-        count++;
         if (count == 0) {
           for (int i = 1; i < numProcesses; i++) {
-            config.logger.info("Process i: alive = " + Process.this.isAlive(i)
-                    + " upsetIntersection = " + upsetIntersection[i]);
+            config.logger.info(
+                    "Process " + i + ": alive = " + Process.this.isAlive(i)
+                            + " upsetIntersection = " + upsetIntersection[i]);
           }
+          count++;
         }
-        count = count % logFreq;
         if (!heartbeatQueue.isEmpty()) {
           Message m = heartbeatQueue.remove();
           // Disable the timer if a timer is running for that process.
           if (exisitingTimers.containsKey(m.getSrc())) {
+            // config.logger.info("Received HB msg : " + m.toString());
             exisitingTimers.get(m.getSrc()).cancel();
           }
           // Add a new timer for the process which has sent a heartbeat
@@ -463,13 +466,19 @@ public class Process {
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
                 ActionType.START, "");
         // Wait for controller's response.
+        config.logger.info("Waiting for Controllers response to START");
         msg = coordinatorControllerQueue.take();
+        config.logger.info(
+                "Received Controllers response to START" + msg.toString());
         executeInstruction(msg);
         // Notify controller about send of VOTE_REQ.
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                 ActionType.VOTE_REQ, Integer.toString(steps));
         // Wait for controller's response.
+        config.logger.info("Waiting for Controllers response to send VOTE_REQ");
         msg = coordinatorControllerQueue.take();
+        config.logger.info("Received Controllers response to send VOTE_REQ"
+                + msg.toString());
         // Send partial or complete VOTE_REQ.
         steps = msg.getInstr().getPartialSteps();
         config.logger.log(Level.INFO, "Coord sending vote req");
@@ -482,7 +491,11 @@ public class Process {
         notifyController(NodeType.COORDINATOR, NotificationType.RECEIVE,
                 ActionType.VOTE_RES, msg.getAction().getValue());
         // Wait for controller's response.
+        config.logger
+                .info("Waiting for Controllers response to revceive VOTE_RES");
         msg = coordinatorControllerQueue.take();
+        config.logger.info("Received Controllers response to revceive VOTE_RES"
+                + msg.toString());
         executeInstruction(msg);
 
         // If some participant died before voting or voted No, abort.
@@ -506,7 +519,12 @@ public class Process {
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                 ActionType.PRE_COMMIT, "");
         // Wait for controller's response.
+        config.logger
+                .info("Waiting for Controllers response to send PRE_COMMIT");
         msg = coordinatorControllerQueue.take();
+        config.logger
+                .info("Received Controllers response to revceive PRE_COMMIT"
+                        + msg.toString());
         steps = msg.getInstr().getPartialSteps();
         sendPartialMsg(ActionType.PRE_COMMIT, steps);
         executeInstruction(msg);
@@ -532,7 +550,10 @@ public class Process {
         notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                 ActionType.STATE_REQ, "");
         // Wait for controller's response.
+        config.logger.info("Waiting for Controllers response to STATE_REQ");
         msg = coordinatorControllerQueue.take();
+        config.logger.info("Received Controllers response to STATE_REQ: "
+                + msg.toString());
         steps = msg.getInstr().getPartialSteps();
         sendPartialMsg(ActionType.STATE_REQ, steps);
         executeInstruction(msg);
@@ -575,7 +596,11 @@ public class Process {
           notifyController(NodeType.COORDINATOR, NotificationType.SEND,
                   ActionType.PRE_COMMIT, "");
           // Wait for controller's response.
+          config.logger
+                  .info("Waiting for Controllers response to send PRE_COMMIT");
           msg = coordinatorControllerQueue.take();
+          config.logger.info("Received Controllers response to PRE_COMMIT"
+                  + msg.toString());
           steps = msg.getInstr().getPartialSteps();
           sendPartialMsg(ActionType.PRE_COMMIT, steps);
           executeInstruction(msg);
@@ -701,7 +726,7 @@ public class Process {
         }
 
         // Notify the controller about receipt of COMMIT.
-        notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+        notifyController(NodeType.PARTICIPANT, NotificationType.DELIVER,
                 ActionType.DECISION, "Commit");
         // Wait for controller's response.
         msg = controllerQueue.take();
@@ -757,12 +782,6 @@ public class Process {
         }
 
         if (dc.State.isTerminalStateType(decision)) {
-          // Notify the controller about receipt of decision.
-          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
-                  ActionType.DECISION, decision.name());
-          // Wait for controller's response.
-          msg = controllerQueue.take();
-          executeInstruction(msg);
           // Write decision to DT Log.
           recordDecision(decision);
           return;
@@ -795,12 +814,6 @@ public class Process {
             return;
           }
 
-          // Notify the controller about receipt of COMMIT.
-          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
-                  ActionType.DECISION, "Commit");
-          // Wait for controller's response.
-          msg = controllerQueue.take();
-          executeInstruction(msg);
           // Write Commit to DT Log.
           recordDecision(StateType.COMMITED);
         } else {
@@ -1097,8 +1110,11 @@ public class Process {
     Message msg = null;
     try {
       if (type == NodeType.COORDINATOR) {
-        config.logger.info("Waiting as Coordinator");
+        config.logger
+                .info("Waiting for Controllers response to receive DECISION");
         msg = coordinatorControllerQueue.take();
+        config.logger.info("Received Controllers response to receive DECISION"
+                + msg.toString());
       } else {
         config.logger.info("Waiting as Participant");
         msg = controllerQueue.take();
@@ -1155,7 +1171,10 @@ public class Process {
     // Wait for controller's response.
     Message msg = null;
     try {
+      config.logger.info("Waiting for Controllers response to send DECISION");
       msg = coordinatorControllerQueue.take();
+      config.logger.info("Received Controllers response to send DECISION"
+              + msg.toString());
     } catch (InterruptedException e) {
       config.logger.log(Level.SEVERE,
               "Received Interrupt waiting for controller on SEND DECISION");

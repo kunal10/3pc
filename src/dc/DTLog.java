@@ -146,6 +146,7 @@ public class DTLog {
             b[i] = true;
           }
           rs.state.setUpset(b);
+          rs.state.setAlive(b);
           rs.state.setType(StateType.UNCERTAIN);
           rs.decision = "";
           rs.writtenPlaylistInTransaction = false;
@@ -176,6 +177,8 @@ public class DTLog {
         line = br.readLine();
       }
     }
+    config.logger
+            .info("Finished reading DT log for process: " + config.procNum);
     return rs;
   }
 

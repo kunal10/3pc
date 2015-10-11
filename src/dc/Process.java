@@ -323,6 +323,7 @@ public class Process {
     }
     
     private void spawnNewThread() {
+      state.setUpset(upsetIntersection);
       if (cId == pId) {
         config.logger.log(Level.INFO,
                 "Spawning New Coordinator Thread for: " + pId);
@@ -379,8 +380,7 @@ public class Process {
                       "upsetIntersection changed while finding new cid after"
                               + "total failure");
             }
-            state.setUpset(upsetIntersection);
-            spawnThread();
+            spawnNewThread();
           }
         }
       }

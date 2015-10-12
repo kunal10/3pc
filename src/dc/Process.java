@@ -63,6 +63,14 @@ public class Process {
     this.startTime = startTime;
   }
 
+  public void clearQueues() {
+    commonQueue.clear();
+    controllerQueue.clear();
+    coordinatorQueue.clear();
+    coordinatorControllerQueue.clear();
+    heartbeatQueue.clear();
+  }
+
   /**
    * This method should be called by controller before sending a start message
    * for a new transaction.
@@ -71,6 +79,7 @@ public class Process {
    * @param vote
    */
   public void initTransaction(Transaction t, boolean vote) {
+    config.logger.info("Starting Transaction: " + t.toString());
     this.transaction = t;
     this.vote = vote;
     // Initialize the recovered state.
@@ -96,15 +105,14 @@ public class Process {
       participant = new Participant();
       participant.start();
     }
-    if (heartBeat != null) {
-      heartBeat.stop();
-    }
     heartBeat = new HeartBeat();
     heartBeat.start();
   }
 
   public void reviveProcessState(Transaction t, boolean vote) {
     config.logger.info("Reviveing process " + pId);
+    clearQueues();
+    killThreads();
     this.cId = -1;
     this.transaction = t;
     this.vote = vote;
@@ -168,7 +176,11 @@ public class Process {
      */
     class SendHeartBeatTask extends TimerTask {
       public void run() {
-        sendHeartBeat();
+        try {
+          sendHeartBeat();
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
       }
     }
 
@@ -181,10 +193,14 @@ public class Process {
       }
 
       public void run() {
-        config.logger.info("Detected death of " + killedProcess);
-        state.removeProcessFromAlive(killedProcess);
-        exisitingTimers.remove(killedProcess);
-        handleDeath();
+        try {
+          config.logger.info("Detected death of " + killedProcess);
+          state.removeProcessFromAlive(killedProcess);
+          exisitingTimers.remove(killedProcess);
+          handleDeath();
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
       }
 
       private void waitForThreads() {
@@ -277,10 +293,13 @@ public class Process {
     }
 
     private void addTimerToExistingTimer(int i) {
-      int delay = 2000;
-      TimerTask tti = new ProcessKillOnTimeoutTask(i);
-      exisitingTimers.put(i, tti);
-      timer.schedule(tti, delay);
+      try {
+        int delay = 1200;
+        TimerTask tti = new ProcessKillOnTimeoutTask(i);
+        exisitingTimers.put(i, tti);
+        timer.schedule(tti, delay);
+      } catch (Exception e) {
+      }
     }
 
     private void updateReceivedNpMsg(Message m) {
@@ -439,13 +458,13 @@ public class Process {
       while (true) {
         // If process has not reached a decision it keeps processing heart beats
         // of other processes.
-        if (!state.isTerminalState()) {
-          processHeartBeat();
-        } else {
-          for (Integer key : exisitingTimers.keySet()) {
-            exisitingTimers.get(key).cancel();
-          }
-        }
+        // if (!state.isTerminalState()) {
+        processHeartBeat();
+        // } else {
+        // for (Integer key : exisitingTimers.keySet()) {
+        // exisitingTimers.get(key).cancel();
+        // }
+        // }
       }
     }
   }
@@ -1150,7 +1169,7 @@ public class Process {
         nc.sendMsg(dest, msg);
       }
     } else {
-      for (int dest = 1; dest <= steps; dest++) {
+      for (int dest = 1; dest <= steps && dest < numProcesses; dest++) {
         // Coordinator should not send a decision to its participant thread so
         // decision is not written to DT Log twice.
         if (dest == pId || !isOperational(dest)) {
@@ -1290,15 +1309,23 @@ public class Process {
     }
   }
 
-  private void kill() {
-    dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
-    heartBeat.shutdownTimers();
-    nc.shutdown();
+  public void killThreads() {
+    if (heartBeat != null) {
+      heartBeat.shutdownTimers();
+    }
     killThread(heartBeat);
     killThread(coordinator);
     killThread(participant);
     killThread(newCoordinator);
     killThread(newParticipant);
+  }
+
+  private void kill() {
+    if (dtLog != null && state != null && recoveredState != null) {
+      dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
+    }
+    nc.shutdown();
+    killThreads();
   }
 
   /**

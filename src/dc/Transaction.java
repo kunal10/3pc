@@ -20,6 +20,18 @@ public class Transaction {
     this.newSong = newSong;
   }
   
+  public String toString() {
+    StringBuilder result = new StringBuilder();
+    result.append("\nTransactionType: " + type.name());
+    if (oldSong != null) {
+      result.append("\nOldSong: " + oldSong.toString());
+    }
+    if (newSong != null) {
+      result.append("\nNew Song: " + newSong.toString());
+    }
+    return result.toString();
+  }
+  
   public TransactionType getType() {
     return type;
   }

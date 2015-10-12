@@ -906,10 +906,10 @@ public class Process {
         continue;
       }
       if (expAction == ActionType.STATE_RES) {
+        result = StateType.UNCERTAIN.name();
         if (!isOperational(key)) {
           continue;
         }
-        result = StateType.UNCERTAIN.name();
         if (!received.containsKey(key)) {
           config.logger.log(Level.SEVERE,
                   "Did not receive msg from operational process:" + key);
@@ -1035,7 +1035,8 @@ public class Process {
                 && recvAction == ActionType.DECISION) {
           config.logger.log(Level.INFO, "Waiting for " + expAction.name()
                   + " Revceived: " + msg.toString());
-          response.setAction(new Action(recvAction, StateType.ABORTED.name()));
+          response.setAction(
+                  new Action(recvAction, msg.getAction().getValue()));
           return true;
         }
         config.logger.log(Level.SEVERE, "Waiting for " + expAction.name()
@@ -1206,6 +1207,8 @@ public class Process {
                 newSong.getUrl());
         break;
       case DELETE:
+        config.logger
+                .info("Deleting Song:" + transaction.getOldSong().getName());
         playlist.deleteSong(transaction.getOldSong().getName());
         break;
       default:
@@ -1288,6 +1291,7 @@ public class Process {
   }
 
   private void kill() {
+    dtLog.writeState(state, recoveredState.writtenPlaylistInTransaction);
     heartBeat.shutdownTimers();
     nc.shutdown();
     killThread(heartBeat);

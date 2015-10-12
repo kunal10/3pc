@@ -48,9 +48,14 @@ public class Controller {
       initializeCommunication();
 
       for (ConfigElement transaction : sc.getTransactionList()) {
+        config.logger.info("Starting Transaction: "
+                + transaction.getTransaction().toString());
         initializeTransaction(transaction);
         Thread[] threads = new SendHandler[config.numProcesses];
+        decisionReached = new boolean[config.numProcesses];
+
         for (int i = 1; i < threads.length; i++) {
+          decisionReached[i] = false;
           threads[i] = new SendHandler(instructionQueue[i], i,
                   !(transaction.getNoVotes().contains(i)));
           threads[i].start();
@@ -68,6 +73,14 @@ public class Controller {
       // TODO Auto-generated catch block
       e.printStackTrace();
     }
+  }
+
+  private boolean haveAllProcessesReachedDecision() {
+    boolean rd = true;
+    for (int i = 1; i < config.numProcesses; i++) {
+      rd = rd && decisionReached[i];
+    }
+    return rd;
   }
 
   private void initializeProcesses(String[] configFiles)
@@ -321,6 +334,9 @@ public class Controller {
         // and participant thread of the coordinator
         sendHaltToProcess(i, m);
       } else if (iType == InstructionType.KILL) {
+        if (isTransactionComplete(m)) {
+          decisionReached[procNum] = true;
+        }
         m.setInstr(i);
         m.setDest(procNum);
         // Check: What did we decide ??
@@ -351,7 +367,7 @@ public class Controller {
        */
       config.logger.info("While entry");
       while (!indiviualInstructionQueue.isEmpty()) {
-        config.logger.info("Inst queue for"+procNum);
+        config.logger.info("Inst queue for" + procNum);
         Instruction currentInstruction = indiviualInstructionQueue.peek();
         currentInstructionSeqNum = indiviualInstructionQueue.peek().getSeqNo();
         if (checkIfCurrentInstructionRevive(currentInstruction)) {
@@ -406,18 +422,23 @@ public class Controller {
         }
       }
       boolean isTransactionComplete = false;
-      while (!isTransactionComplete) {
-        try {
-          Message m = messageQueue[procNum].take();
-          config.logger
-                  .info("Checking if decision reached using :" + m.toString());
-          isTransactionComplete = isTransactionComplete(m);
-          sendContinueToProcess(m);
-        } catch (InterruptedException e) {
-          config.logger.log(Level.WARNING,
-                  "Interrupted wait on decision message for proc " + procNum);
+      while (!haveAllProcessesReachedDecision()) {
+        if (!messageQueue[procNum].isEmpty()) {
+          try {
+            Message m = messageQueue[procNum].take();
+            config.logger.info(
+                    "Checking if decision reached using :" + m.toString());
+            isTransactionComplete = isTransactionComplete(m);
+            decisionReached[procNum] = decisionReached[procNum]
+                    || isTransactionComplete;
+            sendContinueToProcess(m);
+          } catch (InterruptedException e) {
+            config.logger.log(Level.WARNING,
+                    "Interrupted wait on decision message for proc " + procNum);
+          }
         }
       }
+      config.logger.info("Process " + procNum + " has ended");
     }
 
     /**

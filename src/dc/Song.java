@@ -32,7 +32,7 @@ public class Song {
       return false;
     }
     Song otherSong = (Song) other;
-    if (this.name == otherSong.getName()) {
+    if (this.name.compareTo(otherSong.getName()) == 0) {
       return true;
     } 
     return false;

@@ -1,10 +1,16 @@
 add, Thinking Out Loud, https://www.youtube.com/watch?v=lp-EO5I60KA
 Vote No:
-1:KILL after SEND VOTE_REQ
-2:KILL after SEND STATE_REQ
-3:KILL after SEND STATE_REQ
+1:KILL after SEND PRE_COMMIT 1
+2:KILL after SEND PRE_COMMIT 1
+3:KILL after SEND PRE_COMMIT 1
 4:KILL after SEND STATE_REQ
 3:REVIVE
 2:REVIVE
 4:REVIVE
 1:REVIVE
+
+add, Abcde, https://www.youtube.com/watch?v=lp-EO5I60KA
+Vote No:
+
+edit, New Song, https://www.youtube.com/watch?v=lp-EO5I60KA, Thinking Out Loud
+Vote No:

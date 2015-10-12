@@ -406,7 +406,10 @@ public class Process {
           if (!isParticipant()) {
             dc.State s = m.getState();
             if (s.isTerminalState()) {
-              recordDecision(s.getType());
+              try {
+                recordDecision(s.getType());
+              } catch (Exception e) {
+              }
               // Return since we don't need to process any more messages.
               return;
             }
@@ -706,7 +709,7 @@ public class Process {
         }
 
         if (msg.getAction().getType() == ActionType.DECISION) {
-          notifyController(NodeType.PARTICIPANT, NotificationType.RECEIVE,
+          notifyController(NodeType.PARTICIPANT, NotificationType.DELIVER,
                   ActionType.DECISION, "ABORT");
           // Wait for controller's response.
           msg = controllerQueue.take();
@@ -793,12 +796,12 @@ public class Process {
 
         boolean recvPrecommitOrAbort = waitForCoordinatorMsg(
                 ActionType.PRE_COMMIT, msg);
-        StateType decision = StateType.valueOf(msg.getAction().getValue());
         if (!recvPrecommitOrAbort) {
           // If received some unexpected action or STATE_REQ from higher
           // coordinator.
           return;
         }
+        StateType decision = StateType.valueOf(msg.getAction().getValue());
 
         if (dc.State.isTerminalStateType(decision)) {
           // Write decision to DT Log.
@@ -971,6 +974,7 @@ public class Process {
   }
 
   private boolean waitForVoteReq() {
+    config.logger.info("Waiting for Vote Req");
     while (true) {
       Message msg = null;
       ActionType recvAction = null;
@@ -1141,7 +1145,7 @@ public class Process {
       }
       config.logger.info("Received msg from Controller" + msg.toString());
     } catch (InterruptedException e) {
-      e.printStackTrace();
+      // e.printStackTrace();
       return;
     }
     executeInstruction(msg);

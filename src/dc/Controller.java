@@ -69,11 +69,20 @@ public class Controller {
             e.printStackTrace();
           }
         }
+        for (int i = 1; i < config.numProcesses; i++) {
+          processes[i].clearQueues();
+          processes[i].killThreads();
+        }
       }
+      Thread.sleep(3000);
       for (int i = 1; i < config.numProcesses; i++) {
         processes[i].killThreads();
+        processes[i].clearQueues();
       }
     } catch (IOException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    } catch (InterruptedException e) {
       // TODO Auto-generated catch block
       e.printStackTrace();
     }
@@ -247,8 +256,6 @@ public class Controller {
 
     public SendHandler(LinkedList<Instruction> instructionQueue, int procNum,
             boolean vote) {
-      processes[procNum].clearQueues();
-      processes[procNum].killThreads();
       this.indiviualInstructionQueue = instructionQueue;
       this.procNum = procNum;
       this.vote = vote;

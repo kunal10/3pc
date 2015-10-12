@@ -55,6 +55,7 @@ public class Controller {
         decisionReached = new boolean[config.numProcesses];
 
         for (int i = 1; i < threads.length; i++) {
+          messageQueue[i].clear();
           decisionReached[i] = false;
           threads[i] = new SendHandler(instructionQueue[i], i,
                   !(transaction.getNoVotes().contains(i)));

@@ -11,4 +11,4 @@ port3=5003
 port4=5004
 procNum=0
 logfile=LogP0.txt
-SimulationConfig=CascadingCoordinatorFailure
+SimulationConfig=AllVoteYes
